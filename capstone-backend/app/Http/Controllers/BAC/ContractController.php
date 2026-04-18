@@ -10,6 +10,7 @@ use App\Models\ContractAmendment;
 use App\Models\ContractExtension;
 use App\Models\ContractSuspension;
 use App\Models\BlockchainEvent;
+use App\Services\EthereumBridgeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -80,6 +81,15 @@ class ContractController extends Controller
                 $ntpHash,
                 ['contract_id' => $contract->id]
             );
+
+            // Anchor CONTRACT_SIGNED on Ethereum
+            try {
+                $bridge = app(EthereumBridgeService::class);
+                $procurementId = (string) ($award->invitation->purchase_requisition_id ?? $award->id);
+                $bridge->anchorEvent($procurementId, $contractHash, 4); // 4 = CONTRACT_SIGNED
+            } catch (\Throwable $e) {
+                \Log::warning("[Contract] Ethereum anchoring skipped: {$e->getMessage()}");
+            }
 
             DB::commit();
 

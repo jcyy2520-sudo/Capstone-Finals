@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'ethereum_bridge' => [
+        'url' => env('ETHEREUM_BRIDGE_URL', 'http://127.0.0.1:3001'),
+        'api_key' => env('ETHEREUM_BRIDGE_API_KEY', ''),
+        'webhook_key' => env('ETHEREUM_WEBHOOK_KEY', ''),
+    ],
+
 ];

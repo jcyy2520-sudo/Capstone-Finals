@@ -8,6 +8,7 @@ use App\Models\InspectionAcceptanceReport;
 use App\Models\Invoice;
 use App\Models\Vendor;
 use App\Models\BlockchainEvent;
+use App\Services\EthereumBridgeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -189,6 +190,17 @@ class InvoiceController extends Controller
                 null,
                 ['contract_id' => $invoice->contract_id, 'amount' => $invoice->amount]
             );
+
+            // Anchor PAYMENT_RECORDED on Ethereum
+            try {
+                $bridge = app(EthereumBridgeService::class);
+                $contract = $invoice->contract;
+                $procurementId = (string) ($contract->purchase_requisition_id ?? $contract->id);
+                $paymentHash = hash('sha256', "PAYMENT_{$invoice->id}_{$invoice->amount}");
+                $bridge->anchorEvent($procurementId, $paymentHash, 5); // 5 = PAYMENT_RECORDED
+            } catch (\Throwable $e) {
+                \Log::warning("[Invoice] Ethereum anchoring skipped: {$e->getMessage()}");
+            }
 
             DB::commit();
             return response()->json(['message' => 'Invoice marked as paid.', 'invoice' => $invoice->fresh()]);

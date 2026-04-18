@@ -16,6 +16,7 @@ class BlockchainEvent extends Model
         'actor_id', 'document_hash', 'metadata_hash',
         'previous_hash', 'block_hash', 'block_number',
         'metadata', 'recorded_at',
+        'eth_tx_hash', 'anchor_id',
     ];
 
     protected function casts(): array
@@ -29,6 +30,24 @@ class BlockchainEvent extends Model
     public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'actor_id');
+    }
+
+    public function ethereumTransaction(): BelongsTo
+    {
+        return $this->belongsTo(EthereumTransaction::class, 'eth_tx_hash', 'tx_hash');
+    }
+
+    public function chainAnchor(): BelongsTo
+    {
+        return $this->belongsTo(ChainAnchor::class, 'anchor_id');
+    }
+
+    /**
+     * Whether this event has been confirmed on the Ethereum network.
+     */
+    public function isOnChain(): bool
+    {
+        return $this->eth_tx_hash !== null || $this->anchor_id !== null;
     }
 
     // ─── Simulated Blockchain Logic ─────────────────────

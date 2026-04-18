@@ -1,0 +1,42 @@
+# Core sensitive files
+.env
+.env.local
+.env.production
+.env.development
+*.log
+.DS_Store
+Thumbs.db
+
+# Dependencies
+node_modules/
+vendor/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Backend specifics
+capstone-backend/storage/*.key
+capstone-backend/storage/framework/cache/data/*
+capstone-backend/storage/framework/sessions/*
+capstone-backend/storage/framework/views/*
+capstone-backend/storage/logs/*.log
+capstone-backend/bootstrap/cache/*
+capstone-backend/public/storage
+capstone-backend/auth.json
+
+# Frontend specifics
+capstone-frontend/dist/
+capstone-frontend/dist-ssr/
+
+# Blockchain/Bridge specifics
+capstone-bridge/artifacts/
+capstone-bridge/cache/
+capstone-bridge/typechain/
+capstone-bridge/typechain-types/
+
+# Temporary files
+*.tmp
+*.temp

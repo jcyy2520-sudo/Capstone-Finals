@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BidSubmission;
 use App\Models\Invitation;
 use App\Models\BlockchainEvent;
+use App\Services\EthereumBridgeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -81,6 +82,14 @@ class BidSubmissionController extends Controller
                 ]
             );
 
+            // Generate sealed bid commitment for on-chain commit-reveal scheme
+            $salt = bin2hex(random_bytes(32));
+            $sealedCommitHash = hash('sha256', $validated['bid_amount'] . $salt);
+            $submission->update([
+                'sealed_commit_hash' => $sealedCommitHash,
+                'sealed_salt' => encrypt($salt),
+            ]);
+
             BlockchainEvent::recordEvent(
                 BlockchainEvent::BID_SUBMITTED,
                 $request->user()->id,
@@ -94,6 +103,20 @@ class BidSubmissionController extends Controller
                     'bid_amount' => $validated['bid_amount'],
                 ]
             );
+
+            // Anchor sealed bid on Ethereum (non-blocking — failure doesn't break flow)
+            try {
+                $bridge = app(EthereumBridgeService::class);
+                $ethTx = $bridge->submitSealedBid(
+                    (string) $invitation->purchase_requisition_id,
+                    $sealedCommitHash
+                );
+                if ($ethTx) {
+                    $submission->update(['on_chain_tx_hash' => $ethTx->tx_hash]);
+                }
+            } catch (\Throwable $e) {
+                \Log::warning("[BidSubmission] Ethereum anchoring skipped: {$e->getMessage()}");
+            }
 
             DB::commit();
 

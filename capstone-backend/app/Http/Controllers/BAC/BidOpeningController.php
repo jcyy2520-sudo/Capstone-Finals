@@ -12,6 +12,7 @@ use App\Models\Invitation;
 use App\Models\PreBidConference;
 use App\Models\BlockchainEvent;
 use App\Services\DocumentRegistryService;
+use App\Services\EthereumBridgeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -292,6 +293,15 @@ class BidOpeningController extends Controller
                     'ranked_prices' => $prices->pluck('rank', 'vendor_id')->toArray(),
                 ]
             );
+
+            // Anchor BID_OPENING_COMPLETED on Ethereum
+            try {
+                $bridge = app(EthereumBridgeService::class);
+                $procurementId = (string) ($bidOpening->invitation->purchase_requisition_id ?? '');
+                $bridge->anchorEvent($procurementId, $docHash, 2); // 2 = BID_OPENING_COMPLETED
+            } catch (\Throwable $e) {
+                \Log::warning("[BidOpening] Ethereum anchoring skipped: {$e->getMessage()}");
+            }
 
             DB::commit();
 

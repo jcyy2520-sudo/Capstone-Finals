@@ -45,6 +45,26 @@ Route::get('/health', function () {
     ]);
 });
 
+// ── Public Transparency API (no auth required) ─────────
+
+Route::prefix('public')->middleware('throttle:60,1')->group(function () {
+    Route::get('/procurements', [\App\Http\Controllers\Public\TransparencyController::class, 'index']);
+    Route::get('/procurements/{reference}', [\App\Http\Controllers\Public\TransparencyController::class, 'show']);
+    Route::get('/procurements/{reference}/timeline', [\App\Http\Controllers\Public\TransparencyController::class, 'timeline']);
+    Route::get('/procurements/{reference}/bids', [\App\Http\Controllers\Public\TransparencyController::class, 'bids']);
+    Route::get('/procurements/{reference}/blockchain', [\App\Http\Controllers\Public\TransparencyController::class, 'blockchainTrail']);
+    Route::get('/blockchain/verify', [\App\Http\Controllers\Public\TransparencyController::class, 'verifyChain']);
+    Route::get('/blockchain/verify-event/{blockNumber}', [\App\Http\Controllers\Public\TransparencyController::class, 'verifyEvent']);
+    Route::get('/statistics', [\App\Http\Controllers\Public\TransparencyController::class, 'statistics']);
+    Route::get('/procurements/{reference}/documents', [\App\Http\Controllers\Public\TransparencyController::class, 'documents']);
+    Route::get('/documents/{id}/download', [\App\Http\Controllers\Public\TransparencyController::class, 'downloadDocument']);
+    Route::get('/calendar', [\App\Http\Controllers\Public\TransparencyController::class, 'calendar']);
+});
+
+// ── Internal Webhook (bridge service -> Laravel) ──────────
+
+Route::post('/internal/blockchain-webhook', [\App\Http\Controllers\Internal\BlockchainWebhookController::class, 'handle']);
+
 // ── Auth Routes ─────────────────────────────────────────
 
 Route::prefix('auth')->group(function () {

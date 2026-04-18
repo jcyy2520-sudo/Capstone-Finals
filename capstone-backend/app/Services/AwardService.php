@@ -9,6 +9,7 @@ use App\Models\BidPrice;
 use App\Models\BlockchainEvent;
 use App\Models\PostQualification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AwardService
 {
@@ -97,6 +98,15 @@ class AwardService
                 $noaHash,
                 ['award_id' => $award->id, 'vendor_id' => $award->vendor_id, 'contract_amount' => $award->contract_amount]
             );
+
+            // Anchor NOA_ISSUED on Ethereum blockchain
+            try {
+                $bridge = app(EthereumBridgeService::class);
+                $procurementId = (string) ($award->invitation->purchase_requisition_id ?? $award->id);
+                $bridge->anchorEvent($procurementId, $noaHash, 3); // 3 = NOA_ISSUED
+            } catch (\Throwable $e) {
+                Log::warning("[AwardService] Ethereum anchoring skipped for NOA: {$e->getMessage()}");
+            }
 
             return $award->fresh();
         });
