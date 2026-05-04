@@ -6,6 +6,7 @@ export default function SystemAdminSidebar() {
     { label: 'User Management', path: '/admin/users', icon: 'users' },
     { label: 'Audit Logs', path: '/admin/audit', icon: 'shield' },
     { label: 'Blockchain Monitor', path: '/admin/blockchain', icon: 'link' },
+    { label: 'Immutable History', path: '/admin/immutable-history', icon: 'database' },
     { label: 'System Config', path: '/admin/config', icon: 'settings' },
   ];
 

@@ -85,10 +85,9 @@ class NotificationController extends Controller
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
-        $notification->delete();
-        $this->forgetUnreadCountCache($request->user()->id);
-
-        return response()->json(['message' => 'Notification deleted']);
+        return response()->json([
+            'message' => 'Notifications are immutable and cannot be deleted.',
+        ], 422);
     }
 
     private function unreadCountCacheKey(int $userId): string

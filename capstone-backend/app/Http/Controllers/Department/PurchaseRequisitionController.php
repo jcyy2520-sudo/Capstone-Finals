@@ -160,14 +160,9 @@ class PurchaseRequisitionController extends Controller
      */
     public function destroy(PurchaseRequisition $purchaseRequisition): JsonResponse
     {
-        if ($purchaseRequisition->status !== 'draft') {
-            return response()->json(['message' => 'Only draft PRs can be deleted.'], 422);
-        }
-
-        $purchaseRequisition->lineItems()->delete();
-        $purchaseRequisition->delete();
-
-        return response()->json(['message' => 'PR deleted.']);
+        return response()->json([
+            'message' => 'Draft PRs are immutable. Use the cancellation workflow instead of deleting the record.',
+        ], 422);
     }
 
     // ── Status Transition Actions ────────────────────────

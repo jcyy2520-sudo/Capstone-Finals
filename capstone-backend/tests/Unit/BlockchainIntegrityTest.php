@@ -24,13 +24,14 @@ class BlockchainIntegrityTest extends TestCase
         BlockchainEvent::create([
             'block_number' => 1,
             'event_type' => 'APP_ENTRY_CREATED',
-            'actor_id' => 1,
+            'actor_id' => null,
             'entity_type' => 'App\Models\AppEntry',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'test'),
             'previous_hash' => str_repeat('0', 64),
             'block_hash' => hash('sha256', 'block1'),
             'metadata' => json_encode(['test' => true]),
+            'recorded_at' => now(),
         ]);
 
         $result = BlockchainEvent::verifyChainIntegrity();
@@ -45,38 +46,41 @@ class BlockchainIntegrityTest extends TestCase
         BlockchainEvent::create([
             'block_number' => 1,
             'event_type' => 'APP_ENTRY_CREATED',
-            'actor_id' => 1,
+            'actor_id' => null,
             'entity_type' => 'App\Models\AppEntry',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'doc1'),
             'previous_hash' => str_repeat('0', 64),
             'block_hash' => $genesisHash,
             'metadata' => null,
+            'recorded_at' => now(),
         ]);
 
         $block2Hash = hash('sha256', 'block2');
         BlockchainEvent::create([
             'block_number' => 2,
             'event_type' => 'APP_ENTRY_SUBMITTED',
-            'actor_id' => 1,
+            'actor_id' => null,
             'entity_type' => 'App\Models\AppEntry',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'doc2'),
             'previous_hash' => $genesisHash,
             'block_hash' => $block2Hash,
             'metadata' => null,
+            'recorded_at' => now(),
         ]);
 
         BlockchainEvent::create([
             'block_number' => 3,
             'event_type' => 'PR_CREATED',
-            'actor_id' => 2,
+            'actor_id' => null,
             'entity_type' => 'App\Models\PurchaseRequisition',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'doc3'),
             'previous_hash' => $block2Hash,
             'block_hash' => hash('sha256', 'block3'),
             'metadata' => null,
+            'recorded_at' => now(),
         ]);
 
         $result = BlockchainEvent::verifyChainIntegrity();
@@ -91,26 +95,28 @@ class BlockchainIntegrityTest extends TestCase
         BlockchainEvent::create([
             'block_number' => 1,
             'event_type' => 'APP_ENTRY_CREATED',
-            'actor_id' => 1,
+            'actor_id' => null,
             'entity_type' => 'App\Models\AppEntry',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'doc1'),
             'previous_hash' => str_repeat('0', 64),
             'block_hash' => $genesisHash,
             'metadata' => null,
+            'recorded_at' => now(),
         ]);
 
         // Block 2 has WRONG previous_hash (chain break)
         BlockchainEvent::create([
             'block_number' => 2,
             'event_type' => 'APP_ENTRY_SUBMITTED',
-            'actor_id' => 1,
+            'actor_id' => null,
             'entity_type' => 'App\Models\AppEntry',
             'entity_id' => 1,
             'document_hash' => hash('sha256', 'doc2'),
             'previous_hash' => hash('sha256', 'TAMPERED'),
             'block_hash' => hash('sha256', 'block2'),
             'metadata' => null,
+            'recorded_at' => now(),
         ]);
 
         $result = BlockchainEvent::verifyChainIntegrity();

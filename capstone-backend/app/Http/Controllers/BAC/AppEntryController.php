@@ -175,15 +175,9 @@ class AppEntryController extends Controller
      */
     public function destroy(AppEntry $appEntry): JsonResponse
     {
-        if ($appEntry->status !== 'draft') {
-            return response()->json([
-                'message' => 'Only draft entries can be deleted.',
-            ], 422);
-        }
-
-        $appEntry->delete();
-
-        return response()->json(['message' => 'APP entry deleted.']);
+        return response()->json([
+            'message' => 'Draft APP entries are immutable. Keep the draft or route it through the formal return workflow.',
+        ], 422);
     }
 
     // ── Status Transition Actions ────────────────────────

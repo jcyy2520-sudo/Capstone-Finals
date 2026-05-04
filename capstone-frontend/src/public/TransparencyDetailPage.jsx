@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, ShieldCheck, Loader2, Hash, Exter
 import publicApi from '../services/publicApi';
 import { getPublicApiBaseUrl } from '../services/publicApiBase';
 import LifecycleTimeline from './components/LifecycleTimeline';
+import PublicIntegrityBadge from './components/PublicIntegrityBadge';
 
 export default function TransparencyDetailPage() {
   const { reference } = useParams();
@@ -190,6 +191,10 @@ export default function TransparencyDetailPage() {
           <InfoCell label="Posted" value={formatDate(procurement.posted_at)} />
           <InfoCell label="Deadline" value={formatDate(procurement.submission_deadline)} />
         </div>
+
+        {procurement.integrity_status && (
+          <PublicIntegrityBadge integrityStatus={procurement.integrity_status} className="mt-4" />
+        )}
 
         {/* PhilGEPS Reference */}
         {procurement.philgeps_reference && (
@@ -400,21 +405,24 @@ export default function TransparencyDetailPage() {
                     <div className={`rounded-lg border p-3 flex items-center gap-2.5 ${
                       verifyResult.valid
                         ? 'bg-emerald-50 border-emerald-200'
-                        : 'bg-red-50 border-red-200'
+                        : 'bg-amber-50 border-amber-200'
                     }`}>
                       {verifyResult.valid
                         ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
-                        : <XCircle size={16} className="text-red-600 shrink-0" />
+                        : <AlertTriangle size={16} className="text-amber-600 shrink-0" />
                       }
                       <div>
-                        <p className={`text-sm font-semibold ${verifyResult.valid ? 'text-emerald-800' : 'text-red-800'}`}>
+                        <p className={`text-sm font-semibold ${verifyResult.valid ? 'text-emerald-800' : 'text-amber-800'}`}>
                           {verifyResult.valid
-                            ? 'Chain Integrity Verified'
-                            : `CHAIN INTEGRITY BROKEN at block #${verifyResult.brokenBlock}`
+                            ? 'Blockchain Trail Verified'
+                            : 'Integrity Warning'
                           }
                         </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
-                          {verifyResult.blocks.length} blocks checked in-browser — server cannot fake this result
+                        <p className={`text-[11px] mt-0.5 ${verifyResult.valid ? 'text-emerald-700' : 'text-amber-800'}`}>
+                          {verifyResult.valid
+                            ? `${verifyResult.blocks.length} blocks checked in-browser. No public integrity issues were detected in this trail.`
+                            : `A blockchain consistency issue was detected near block #${verifyResult.brokenBlock}. This record should be reviewed by the procuring entity.`
+                          }
                         </p>
                       </div>
                     </div>

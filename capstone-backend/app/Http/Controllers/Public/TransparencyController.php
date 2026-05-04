@@ -51,6 +51,7 @@ class TransparencyController extends Controller
         // Sanitize for public consumption
         $paginated->getCollection()->transform(function ($invitation) use ($preparationStatuses) {
             $pr = $invitation->purchaseRequisition;
+            $integrityStatus = self::getPublicIntegrityStatus((string) $invitation->purchase_requisition_id);
 
             // Determine public phase
             if (in_array($invitation->status, $preparationStatuses)) {
@@ -117,6 +118,7 @@ class TransparencyController extends Controller
                 'philgeps_reference' => $invitation->philgeps_reference,
                 'lifecycle_steps' => count($lifecycle),
                 'lifecycle_completed' => $completedMilestones,
+                'integrity_status' => $integrityStatus,
                 'public_phase' => $publicPhase,
             ];
         });
@@ -168,6 +170,7 @@ class TransparencyController extends Controller
         // Build full lifecycle with completion data
         $lifecycle = self::getLifecycleForMode($invitation->procurement_mode);
         $procurementId = (string) $invitation->purchase_requisition_id;
+        $integrityStatus = self::getPublicIntegrityStatus($procurementId);
         $events = BlockchainEvent::with(['actor', 'actor.role'])
             ->where('procurement_id', $procurementId)
             ->orderBy('block_number')
@@ -279,6 +282,7 @@ class TransparencyController extends Controller
             ] : null,
             'lifecycle' => $lifecycleData,
             'sub_events' => $subEventData,
+            'integrity_status' => $integrityStatus,
             'public_phase' => 'active',
         ]);
     }
@@ -564,6 +568,16 @@ class TransparencyController extends Controller
             'direct_contracting', 'negotiated_procurement', 'repeat_order' => $simplifiedProcess,
             default => $competitiveBidding,
         };
+    }
+
+    /**
+     * Public-facing integrity state for a procurement.
+     * Keeps the copy neutral for public viewers while still surfacing warnings.
+     */
+    private static function getPublicIntegrityStatus(?string $procurementId): array
+    {
+        return app(\App\Services\ProcurementIntegrityService::class)
+            ->summarizeForPublic($procurementId);
     }
 
     /**

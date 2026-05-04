@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\VendorRegistrationController;
 use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\ImmutableHistoryController;
 use App\Http\Controllers\BAC\AppEntryController;
 use App\Http\Controllers\Department\PurchaseRequisitionController;
 use App\Http\Controllers\BAC\InvitationController;
@@ -465,6 +466,24 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
     Route::middleware('role:system_admin,internal_auditor,observer')->group(function () {
         Route::get('/audit-logs', [AuditLogController::class, 'index']);
         Route::get('/audit-logs/{auditLog}', [AuditLogController::class, 'show']);
+    });
+
+    Route::middleware('role:system_admin,internal_auditor')->group(function () {
+        Route::get('/immutable-history', [ImmutableHistoryController::class, 'index']);
+    });
+
+    Route::middleware('role:internal_auditor')->group(function () {
+        Route::get('/integrity-investigations', function (Request $request) {
+            $status = trim((string) $request->input('status', ''));
+            $search = trim((string) $request->input('search', ''));
+
+            return response()->json(
+                app(\App\Services\ProcurementIntegrityService::class)->listInvestigations(
+                    $status !== '' ? $status : null,
+                    $search !== '' ? $search : null,
+                )
+            );
+        });
     });
 
     // ── Reports & Analytics ─────────────────────────────

@@ -82,6 +82,14 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-sm text-gray-900 mb-1">Blockchain Verification</h3>
               <p className="text-xs text-gray-500">Verify chain integrity and event hashes</p>
             </Link>
+            <Link to="/auditor/immutable-history" className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:bg-gray-50 transition">
+              <h3 className="font-semibold text-sm text-gray-900 mb-1">Immutable History</h3>
+              <p className="text-xs text-gray-500">Inspect append-only snapshots of critical record changes</p>
+            </Link>
+            <Link to="/auditor/investigations" className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:bg-gray-50 transition">
+              <h3 className="font-semibold text-sm text-gray-900 mb-1">Integrity Investigations</h3>
+              <p className="text-xs text-gray-500">Review open and resolved mismatch cases</p>
+            </Link>
             <Link to="/auditor/reports" className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 hover:bg-gray-50 transition">
               <h3 className="font-semibold text-sm text-gray-900 mb-1">Reports &amp; Analytics</h3>
               <p className="text-xs text-gray-500">Procurement analytics and compliance data</p>

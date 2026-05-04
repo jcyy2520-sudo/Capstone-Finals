@@ -6,6 +6,7 @@ import UserManagementPage from './pages/UserManagementPage';
 import AuditLogsPage from './pages/AuditLogsPage';
 import BlockchainMonitorPage from './pages/BlockchainMonitorPage';
 import SystemConfigPage from './pages/SystemConfigPage';
+import ImmutableHistoryPage from '../../shared/pages/ImmutableHistoryPage';
 
 export default function SystemAdminRoutes() {
   return (
@@ -16,6 +17,7 @@ export default function SystemAdminRoutes() {
         <Route path="users" element={<UserManagementPage />} />
         <Route path="audit" element={<AuditLogsPage />} />
         <Route path="blockchain" element={<BlockchainMonitorPage />} />
+        <Route path="immutable-history" element={<ImmutableHistoryPage roleLabel="system admin" />} />
         <Route path="config" element={<SystemConfigPage />} />
         <Route path="*" element={<Navigate to="dashboard" replace />} />
       </Route>

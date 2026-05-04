@@ -13,6 +13,7 @@ const adminActions = [
   { label: 'System Settings', description: 'Enforce security and session policies.', path: '/admin/config' },
   { label: 'Audit Logs', description: 'Review privileged actions and login anomalies.', path: '/admin/audit' },
   { label: 'Blockchain Monitor', description: 'Validate ledger events and node status.', path: '/admin/blockchain' },
+  { label: 'Immutable History', description: 'Inspect append-only snapshots for protected records.', path: '/admin/immutable-history' },
 ];
 
 export default function SystemAdminDashboard() {

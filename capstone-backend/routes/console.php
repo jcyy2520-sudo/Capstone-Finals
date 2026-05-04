@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // ── Deadline Monitoring (every 6 hours) ─────────────────
 Schedule::command('procureseal:monitor-deadlines')->everySixHours();
+
+// ── Integrity Monitoring (every 15 minutes) ─────────────
+Schedule::command('procureseal:scan-integrity')->everyFifteenMinutes();
