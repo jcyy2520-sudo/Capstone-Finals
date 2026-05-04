@@ -5,10 +5,13 @@ const ROLE_BASE_PATHS = {
   bac_secretariat: '/secretariat',
   bac_member: '/bac-member',
   twg_member: '/twg',
+  procurement_officer: '/procurement',
   department_requester: '/requester',
+  department_head: '/department-head',
   budget_officer: '/budget',
   finance_officer: '/finance',
   vendor: '/vendor',
+  inspection_acceptance_committee: '/iac',
   observer: '/observer',
   internal_auditor: '/auditor',
 };

@@ -224,7 +224,7 @@ class VendorController extends Controller
                     'rank' => $pq->rank,
                     'workflow_status' => $pq->workflow_status,
                     'result' => $pq->result,
-                    'required_documents' => $pq->required_documents,
+                    'required_documents' => $this->normalizeRequiredDocuments($pq->required_documents),
                     'documents_submitted_at' => $pq->documents_submitted_at,
                     'submission_deadline_at' => $deadline,
                     'acknowledged_at' => $pq->acknowledged_at,
@@ -232,6 +232,69 @@ class VendorController extends Controller
             });
 
         return response()->json($records);
+    }
+
+    private function normalizeRequiredDocuments(mixed $documents): array
+    {
+        if (is_string($documents)) {
+            $decoded = json_decode($documents, true);
+            $documents = json_last_error() === JSON_ERROR_NONE ? $decoded : [$documents];
+        }
+
+        if (!is_array($documents)) {
+            return [];
+        }
+
+        return collect($documents)
+            ->map(function ($document, $index) {
+                if (is_string($document)) {
+                    $label = trim($document);
+                    if ($label === '') {
+                        return null;
+                    }
+
+                    return [
+                        'code' => $this->documentCodeFromLabel($label, $index),
+                        'label' => $label,
+                        'required' => true,
+                    ];
+                }
+
+                if (!is_array($document)) {
+                    return null;
+                }
+
+                $label = trim((string) ($document['label'] ?? $document['name'] ?? ''));
+                $code = trim((string) ($document['code'] ?? ''));
+
+                if ($label === '' && $code === '') {
+                    return null;
+                }
+
+                if ($label === '') {
+                    $label = ucwords(str_replace('_', ' ', $code));
+                }
+
+                if ($code === '') {
+                    $code = $this->documentCodeFromLabel($label, $index);
+                }
+
+                return [
+                    'code' => $code,
+                    'label' => $label,
+                    'required' => array_key_exists('required', $document) ? (bool) $document['required'] : true,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function documentCodeFromLabel(string $label, int $index): string
+    {
+        $code = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '_', $label), '_'));
+
+        return $code !== '' ? $code : 'document_' . ($index + 1);
     }
 
     public function getContracts(Request $request): JsonResponse

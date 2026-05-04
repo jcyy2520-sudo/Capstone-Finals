@@ -2,6 +2,44 @@ import { useState, useEffect } from 'react';
 import { FileText, Send, Clock, AlertCircle } from 'lucide-react';
 import api from '../../../services/api';
 
+const normalizeModeBreakdown = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload.map((item) => ({
+      procurement_mode: item?.procurement_mode || item?.mode || 'unknown',
+      count: Number(item?.count ?? 0),
+      total_value: item?.total_value,
+    }));
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.entries(payload).map(([procurement_mode, count]) => ({
+      procurement_mode,
+      count: Number(count ?? 0),
+    }));
+  }
+
+  return [];
+};
+
+const normalizeDepartmentBreakdown = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload.map((item) => ({
+      department: item?.department || item?.name || '—',
+      count: Number(item?.count ?? 0),
+      total_value: item?.total_value,
+    }));
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.entries(payload).map(([department, count]) => ({
+      department,
+      count: Number(count ?? 0),
+    }));
+  }
+
+  return [];
+};
+
 export default function ReportsPage() {
   const [summary, setSummary] = useState(null);
   const [byMode, setByMode] = useState([]);
@@ -19,8 +57,8 @@ export default function ReportsPage() {
         ]);
         if (!controller.signal.aborted) {
           if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
-          if (modeRes.status === 'fulfilled') setByMode(modeRes.value.data?.data || modeRes.value.data || []);
-          if (deptRes.status === 'fulfilled') setByDept(deptRes.value.data?.data || deptRes.value.data || []);
+          if (modeRes.status === 'fulfilled') setByMode(normalizeModeBreakdown(modeRes.value.data?.data || modeRes.value.data || []));
+          if (deptRes.status === 'fulfilled') setByDept(normalizeDepartmentBreakdown(deptRes.value.data?.data || deptRes.value.data || []));
         }
       } catch (err) {
         if (err?.name === 'CanceledError') return;
@@ -32,12 +70,12 @@ export default function ReportsPage() {
     return () => controller.abort();
   }, []);
 
-  const metrics = summary?.metrics || [];
+  const cards = summary?.cards || [];
   const topStats = [
-    { icon: FileText, label: 'APP Entries', value: metrics.find(m => m.key?.includes('app'))?.value ?? '—' },
-    { icon: Send, label: 'Invitations', value: metrics.find(m => m.key?.includes('invitation'))?.value ?? '—' },
-    { icon: Clock, label: 'Pending Items', value: metrics.find(m => m.key?.includes('pending'))?.value ?? '—', tone: 'amber' },
-    { icon: AlertCircle, label: 'Active PRs', value: metrics.find(m => m.key?.includes('pr') || m.key?.includes('requisition'))?.value ?? '—' },
+    { icon: FileText, label: 'APP Entries', value: cards.find((card) => card.key === 'app_queue')?.value ?? '—' },
+    { icon: Send, label: 'Invitations', value: cards.find((card) => card.key?.includes('invitation'))?.value ?? '—' },
+    { icon: Clock, label: 'Pending Items', value: cards.find((card) => card.key?.includes('pending'))?.value ?? '—', tone: 'amber' },
+    { icon: AlertCircle, label: 'Active PRs', value: cards.find((card) => card.key?.includes('pr'))?.value ?? '—' },
   ];
 
   return (

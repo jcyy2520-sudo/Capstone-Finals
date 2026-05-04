@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 class RoleSeeder extends Seeder
 {
     /**
-     * Seed the 12 ProcureSeal roles with their permissions.
+    * Seed the ProcureSeal roles with their permissions.
      * Permissions follow: {module: {view, create, edit, approve, delete}}
      * Based on SRS Section 3: Roles & Access Control
      */
@@ -42,6 +42,7 @@ class RoleSeeder extends Seeder
                 'permissions' => [
                     'app' => ['view' => true, 'approve' => true, 'cancel' => true],
                     'purchase_requisition' => ['view' => true, 'approve' => true, 'cancel' => true],
+                    'invitation' => ['view' => true],
                     'alternative_mode' => ['view' => true, 'approve' => true],
                     'bac_resolution' => ['view' => true, 'approve' => true],
                     'award' => ['view' => true, 'approve' => true, 'cancel' => true, 'sign' => true],
@@ -127,22 +128,55 @@ class RoleSeeder extends Seeder
                 ],
             ],
 
-            // ── 7. Department Requester ─────────────────
+            // ── 7. Procurement Officer ──────────────────
+            [
+                'name' => Role::PROCUREMENT_OFFICER,
+                'display_name' => 'Procurement Officer',
+                'description' => 'Procurement unit officer — procurement review, contract packaging, PO preparation, delivery routing',
+                'requires_2fa' => false,
+                'permissions' => [
+                    'procurement' => ['view' => true],
+                    'purchase_requisition' => ['view' => true, 'edit' => true, 'approve' => true],
+                    'app' => ['view' => true, 'edit' => true, 'approve' => true],
+                    'invitation' => ['view' => true, 'edit' => true],
+                    'award' => ['view' => true],
+                    'contract' => ['view' => true, 'create' => true, 'edit' => true],
+                    'inspection' => ['view' => true],
+                    'reports' => ['view' => true, 'create' => true],
+                    'dashboard' => ['view' => true],
+                ],
+            ],
+
+            // ── 8. Department Requester ─────────────────
             [
                 'name' => Role::DEPARTMENT_REQUESTER,
                 'display_name' => 'Department Requester',
-                'description' => 'Head of Requesting Department — creates PRs, inspection and acceptance',
+                'description' => 'End-user office representative — creates APP entries and PRs and confirms operational receipt',
                 'requires_2fa' => false,
                 'permissions' => [
                     'app' => ['view' => true, 'create' => true, 'edit' => true],
                     'purchase_requisition' => ['view' => true, 'create' => true, 'edit' => true],
                     'procurement' => ['view' => true], // own PRs only (filtered in controller)
-                    'inspection' => ['view' => true, 'create' => true, 'edit' => true, 'approve' => true],
+                    'inspection' => ['view' => true],
                     'dashboard' => ['view' => true],
                 ],
             ],
 
-            // ── 8. Budget Officer ───────────────────────
+            // ── 9. Department Head ──────────────────────
+            [
+                'name' => Role::DEPARTMENT_HEAD,
+                'display_name' => 'Department Head',
+                'description' => 'Department approver — endorses APP entries and PRs from the requesting office',
+                'requires_2fa' => false,
+                'permissions' => [
+                    'app' => ['view' => true, 'approve' => true],
+                    'purchase_requisition' => ['view' => true, 'approve' => true],
+                    'procurement' => ['view' => true],
+                    'dashboard' => ['view' => true],
+                ],
+            ],
+
+            // ── 10. Budget Officer ──────────────────────
             [
                 'name' => Role::BUDGET_OFFICER,
                 'display_name' => 'Budget Officer',
@@ -157,7 +191,7 @@ class RoleSeeder extends Seeder
                 ],
             ],
 
-            // ── 9. Finance Officer ──────────────────────
+            // ── 11. Finance Officer ─────────────────────
             [
                 'name' => Role::FINANCE_OFFICER,
                 'display_name' => 'Finance Officer',
@@ -172,7 +206,7 @@ class RoleSeeder extends Seeder
                 ],
             ],
 
-            // ── 10. Vendor / Supplier ───────────────────
+            // ── 12. Vendor / Supplier ──────────────────
             [
                 'name' => Role::VENDOR,
                 'display_name' => 'Vendor / Supplier',
@@ -191,7 +225,20 @@ class RoleSeeder extends Seeder
                 ],
             ],
 
-            // ── 11. COA / GPPB Observer ─────────────────
+            // ── 13. Inspection and Acceptance Committee ─
+            [
+                'name' => Role::INSPECTION_ACCEPTANCE_COMMITTEE,
+                'display_name' => 'Inspection and Acceptance Committee',
+                'description' => 'Inspection and Acceptance Committee — inspects deliveries and signs IARs',
+                'requires_2fa' => false,
+                'permissions' => [
+                    'contract' => ['view' => true],
+                    'inspection' => ['view' => true, 'create' => true, 'edit' => true, 'approve' => true],
+                    'dashboard' => ['view' => true],
+                ],
+            ],
+
+            // ── 14. COA / GPPB Observer ─────────────────
             [
                 'name' => Role::OBSERVER,
                 'display_name' => 'COA / GPPB Observer',
@@ -202,12 +249,11 @@ class RoleSeeder extends Seeder
                     'blockchain' => ['view' => true],
                     'documents' => ['view' => true],
                     'analytics' => ['view' => true],
-                    'observer_report' => ['view' => true, 'create' => true],
                     'dashboard' => ['view' => true],
                 ],
             ],
 
-            // ── 12. Internal Auditor ────────────────────
+            // ── 15. Internal Auditor ───────────────────
             [
                 'name' => Role::INTERNAL_AUDITOR,
                 'display_name' => 'Internal Auditor',
@@ -230,6 +276,6 @@ class RoleSeeder extends Seeder
             );
         }
 
-        $this->command->info('✅ 12 ProcureSeal roles seeded successfully.');
+        $this->command->info('✅ 15 ProcureSeal roles seeded successfully.');
     }
 }

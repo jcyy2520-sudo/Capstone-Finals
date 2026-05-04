@@ -15,6 +15,7 @@ class AppLifecycleTest extends TestCase
 
     protected Department $department;
     protected User $requester;
+    protected User $departmentHead;
     protected User $secretariat;
     protected User $budgetOfficer;
     protected User $hope;
@@ -26,6 +27,7 @@ class AppLifecycleTest extends TestCase
         $this->department = Department::create(['name' => 'Test Department', 'code' => 'TST']);
 
         $this->requester = $this->createUser('department_requester', 'requester@test.com');
+    $this->departmentHead = $this->createUser('department_head', 'depthead@test.com');
         $this->secretariat = $this->createUser('bac_secretariat', 'secretariat@test.com');
         $this->budgetOfficer = $this->createUser('budget_officer', 'budget@test.com');
         $this->hope = $this->createUser('hope', 'hope@test.com');
@@ -109,11 +111,14 @@ class AppLifecycleTest extends TestCase
 
     public function test_budget_officer_can_certify_budget(): void
     {
-        // Create and submit entry
+        // Create, submit, and endorse entry for budget certification.
         $entry = AppEntry::create(array_merge($this->makeAppEntryPayload(), [
             'created_by' => $this->requester->id,
-            'status' => 'for_budget_certification',
+            'status' => 'pending_budget_certification',
             'fiscal_year' => now()->year,
+            'submitted_at' => now(),
+            'endorsed_by' => $this->departmentHead->id,
+            'endorsed_at' => now(),
         ]));
 
         $response = $this->actAs($this->budgetOfficer)
@@ -121,7 +126,8 @@ class AppLifecycleTest extends TestCase
                 'remarks' => 'Funds available and certified.',
             ]);
 
-        $response->assertStatus(200);
+        $response->assertStatus(200)
+            ->assertJsonPath('data.status', 'pending_secretariat_consolidation');
     }
 
     public function test_observer_cannot_create_app_entry(): void

@@ -29,6 +29,8 @@ return new class extends Migration
                 'pending_dh_endorsement',
                 'pending_budget_certification',
                 'pending_secretariat_review',
+                'pending_mode_confirmation',
+                'mode_confirmed',
                 'accepted',
                 'returned',
                 'cancelled',

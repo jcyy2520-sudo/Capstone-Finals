@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\BAC;
 
 use App\Http\Controllers\Controller;
+use App\Models\Role;
 use App\Models\Contract;
 use App\Models\InspectionAcceptanceReport;
 use App\Models\BlockchainEvent;
@@ -25,24 +26,33 @@ class InspectionAcceptanceReportController extends Controller
     }
 
     /**
-     * List all IARs (for department requester / inspector view).
+     * List all IARs visible to the current role.
      */
     public function all(Request $request)
     {
         $query = InspectionAcceptanceReport::with(['contract.award.invitation', 'inspector', 'acceptor'])
             ->orderBy('created_at', 'desc');
 
-        // Department requester sees only IARs they inspected or where they are the end-user
         $user = $request->user();
-        if ($user->role?->slug === 'department_requester') {
-            $query->where('inspected_by', $user->id);
+        if ($user->role?->name === Role::DEPARTMENT_REQUESTER) {
+            $query->whereHas('contract.purchaseRequisition', function ($purchaseRequisitionQuery) use ($user) {
+                $purchaseRequisitionQuery->where('requester_id', $user->id);
+            });
+        }
+
+        if ($user->role?->name === Role::INSPECTION_ACCEPTANCE_COMMITTEE) {
+            $query->where(function ($inspectionQuery) use ($user) {
+                $inspectionQuery
+                    ->where('inspected_by', $user->id)
+                    ->orWhere('accepted_by', $user->id);
+            });
         }
 
         return response()->json($query->get());
     }
 
     /**
-     * Create a new IAR (inspection report by department requester/end-user).
+        * Create a new IAR (inspection report by the Inspection and Acceptance Committee).
      */
     public function store(Request $request, Contract $contract)
     {
@@ -81,7 +91,7 @@ class InspectionAcceptanceReportController extends Controller
     }
 
     /**
-     * Accept an IAR (by supply officer or authorized acceptor).
+        * Accept an IAR (by the Inspection and Acceptance Committee).
      */
     public function accept(Request $request, InspectionAcceptanceReport $iar)
     {

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronDown, ChevronRight, ShieldCheck, Loader2, Hash, ExternalLink, AlertTriangle, FileText, CheckCircle2, XCircle, Download } from 'lucide-react';
 import publicApi from '../services/publicApi';
+import { getPublicApiBaseUrl } from '../services/publicApiBase';
 import LifecycleTimeline from './components/LifecycleTimeline';
 
 export default function TransparencyDetailPage() {
@@ -260,7 +261,7 @@ export default function TransparencyDetailPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {documents.map((doc) => {
-              const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/public';
+              const apiBase = getPublicApiBaseUrl();
               const downloadUrl = `${apiBase}/documents/${doc.id}/download`;
               const typeIcons = {
                 itb_rfq: '📄',

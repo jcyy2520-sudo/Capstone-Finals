@@ -22,10 +22,13 @@ import BacChairpersonRoutes from './roles/bac_chairperson/routes';
 import BacSecretariatRoutes from './roles/bac_secretariat/routes';
 import BacMemberRoutes from './roles/bac_member/routes';
 import TwgMemberRoutes from './roles/twg_member/routes';
+import ProcurementOfficerRoutes from './roles/procurement_officer/routes';
 import DepartmentRequesterRoutes from './roles/department_requester/routes';
+import DepartmentHeadRoutes from './roles/department_head/routes';
 import BudgetOfficerRoutes from './roles/budget_officer/routes';
 import FinanceOfficerRoutes from './roles/finance_officer/routes';
 import VendorRoutes from './roles/vendor/routes';
+import InspectionAcceptanceCommitteeRoutes from './roles/inspection_acceptance_committee/routes';
 import ObserverRoutes from './roles/observer/routes';
 import InternalAuditorRoutes from './roles/internal_auditor/routes';
 
@@ -82,10 +85,13 @@ const RoleRouter = () => {
     case 'bac_secretariat': return <BacSecretariatRoutes />;
     case 'bac_member': return <BacMemberRoutes />;
     case 'twg_member': return <TwgMemberRoutes />;
+    case 'procurement_officer': return <ProcurementOfficerRoutes />;
     case 'department_requester': return <DepartmentRequesterRoutes />;
+    case 'department_head': return <DepartmentHeadRoutes />;
     case 'budget_officer': return <BudgetOfficerRoutes />;
     case 'finance_officer': return <FinanceOfficerRoutes />;
     case 'vendor': return <VendorRoutes />;
+    case 'inspection_acceptance_committee': return <InspectionAcceptanceCommitteeRoutes />;
     case 'observer': return <ObserverRoutes />;
     case 'internal_auditor': return <InternalAuditorRoutes />;
     default:

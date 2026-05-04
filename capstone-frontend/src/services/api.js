@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getApiBaseUrl } from './publicApiBase';
 
 // ── Simple GET response cache (TTL-based) ───────────────
 const cache = new Map();
@@ -29,7 +30,7 @@ const pendingRequests = new Map();
 
 // ── Axios instance ──────────────────────────────────────
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api',
+  baseURL: getApiBaseUrl(),
   timeout: 20_000, // 20s timeout to prevent hanging
   headers: {
     'Content-Type': 'application/json',

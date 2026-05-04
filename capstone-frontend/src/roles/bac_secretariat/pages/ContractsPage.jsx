@@ -2,8 +2,11 @@ import toast from '../../../utils/toast';
 import { useState, useEffect } from 'react';
 import api from '../../../services/api';
 import DocumentVersionHistory from '../../../shared/components/DocumentVersionHistory';
-function ContractsPage() {
-  const currentRole = 'bac_secretariat';
+function ContractsPage({
+  currentRole = 'bac_secretariat',
+  title = 'Contract Management',
+  description = 'Convert Acknowledged NOAs to Contracts, track project lifecycles, and monitor active operational progress.',
+}) {
   const [data, setData] = useState({ pending_awards: [], contracts: [] });
   const [loading, setLoading] = useState(true);
   // Form states
@@ -11,6 +14,7 @@ function ContractsPage() {
   const [activeAward, setActiveAward] = useState(null);
   const [durationDays, setDurationDays] = useState(30);
   const [submitting, setSubmitting] = useState(false);
+  const [actionModal, setActionModal] = useState({ type: null, contractId: null, contractReference: '', reason: '' });
 
   useEffect(() => {
     fetchData();
@@ -37,7 +41,7 @@ function ContractsPage() {
       await api.post(`/contracts/generate/${activeAward.id}`, {
         duration_days: parseInt(durationDays, 10)
       });
-      toast.error('Contract mapped and Notice to Proceed dynamically issued.');
+      toast.success('Contract mapped and Notice to Proceed dynamically issued.');
       setShowGenerateModal(false);
       fetchData();
     } catch (err) {
@@ -47,44 +51,57 @@ function ContractsPage() {
     }
   };
 
-  const handleSuspend = async (contractId) => {
-    const reason = window.prompt("Enter formal suspension reason (min 15 characters):");
-    if (!reason || reason.length < 15) return toast.error("Reason missing or too short.");
-    
-    try {
-      await api.put(`/contracts/${contractId}/suspend`, { reason });
-      toast.error("Contract formally suspended.");
-      fetchData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to suspend contract.');
-    }
+  const closeActionModal = () => {
+    setActionModal({ type: null, contractId: null, contractReference: '', reason: '' });
   };
 
-  const handleTerminate = async (contractId) => {
-    const reason = window.prompt("Enter mandatory legal termination grounds (min 20 characters):");
-    if (!reason || reason.length < 20) return toast.error("Reason missing or too short.");
-    
+  const openActionModal = (type, contract) => {
+    setActionModal({
+      type,
+      contractId: contract.id,
+      contractReference: contract.contract_reference,
+      reason: '',
+    });
+  };
+
+  const submitContractAction = async () => {
+    const trimmedReason = actionModal.reason.trim();
+    const minLength = actionModal.type === 'terminate' ? 20 : 15;
+
+    if (trimmedReason.length < minLength) {
+      toast.error(`Reason must be at least ${minLength} characters.`);
+      return;
+    }
+
+    const endpoint = actionModal.type === 'terminate' ? 'terminate' : 'suspend';
+    const successMessage = actionModal.type === 'terminate'
+      ? 'Contract legally terminated. Record anchored to blockchain.'
+      : 'Contract formally suspended.';
+
+    setSubmitting(true);
     try {
-      if(!window.confirm("WARNING: Contract termination is permanent. Are you sure you legally want to terminate this contract?")) return;
-      await api.put(`/contracts/${contractId}/terminate`, { reason });
-      toast.error("Contract legally terminated. Record anchored to blockchain.");
+      await api.put(`/contracts/${actionModal.contractId}/${endpoint}`, { reason: trimmedReason });
+      toast.success(successMessage);
+      closeActionModal();
       fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to terminate contract.');
+      toast.error(err.response?.data?.message || `Failed to ${endpoint} contract.`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="border-b border-gray-200 pb-4">
-        <h1 className="text-2xl font-bold text-gray-800">Contract Management</h1>
-        <p className="text-gray-500 text-sm mt-1">Convert Acknowledged NOAs to Contracts, track project lifecycles, and monitor active operational progress.</p>
+        <h1 className="text-2xl font-bold text-gray-800">{title}</h1>
+        <p className="text-gray-500 text-sm mt-1">{description}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
         {/* Pending Contract Fulfillment (Queue) */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 col-span-1 border overflow-hidden h-fit">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 col-span-1 overflow-hidden h-fit">
           <div className="bg-purple-50 px-3 py-2.5 border-b border-purple-100 flex justify-between items-center">
             <h3 className="font-semibold text-purple-800">Pending Execution</h3>
           </div>
@@ -173,10 +190,10 @@ function ContractsPage() {
                      {/* Handlers */}
                      <div className="mt-4 flex gap-2 justify-end">
                         {contract.status === 'active' && (currentRole === 'hope' || currentRole === 'bac_secretariat' || currentRole === 'system_admin') && (
-                           <button onClick={() => handleSuspend(contract.id)} className="px-3 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold hover:bg-orange-200">Suspend Target</button>
+                        <button onClick={() => openActionModal('suspend', contract)} className="px-3 py-1 bg-orange-100 text-orange-700 rounded text-xs font-semibold hover:bg-orange-200">Suspend Target</button>
                         )}
                         {contract.status === 'active' && (currentRole === 'hope' || currentRole === 'system_admin') && (
-                           <button onClick={() => handleTerminate(contract.id)} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold hover:bg-red-200">Legal Terminate</button>
+                        <button onClick={() => openActionModal('terminate', contract)} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-semibold hover:bg-red-200">Legal Terminate</button>
                         )}
                      </div>
                   </div>
@@ -222,6 +239,60 @@ function ContractsPage() {
              </form>
 
            </div>
+        </div>
+      )}
+
+      {actionModal.type && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden">
+            <div className={`px-6 py-4 border-b flex justify-between items-center ${actionModal.type === 'terminate' ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
+              <div>
+                <h3 className={`text-lg font-semibold ${actionModal.type === 'terminate' ? 'text-red-800' : 'text-orange-800'}`}>
+                  {actionModal.type === 'terminate' ? 'Terminate Contract' : 'Suspend Contract'}
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">{actionModal.contractReference}</p>
+              </div>
+              <button onClick={closeActionModal} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-gray-600">
+                {actionModal.type === 'terminate'
+                  ? 'Termination is permanent. Enter the legal grounds before proceeding.'
+                  : 'Provide the formal suspension reason before proceeding.'}
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {actionModal.type === 'terminate' ? 'Legal Grounds' : 'Suspension Reason'}
+                </label>
+                <textarea
+                  rows={4}
+                  value={actionModal.reason}
+                  onChange={(e) => setActionModal((current) => ({ ...current, reason: e.target.value }))}
+                  placeholder={actionModal.type === 'terminate' ? 'State the legal basis for termination...' : 'State the suspension reason...'}
+                  className="w-full px-3 py-2 border rounded border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Minimum {actionModal.type === 'terminate' ? 20 : 15} characters.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t flex justify-end gap-3 bg-gray-50">
+              <button type="button" onClick={closeActionModal} className="px-4 py-2 border rounded text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitContractAction}
+                disabled={submitting}
+                className={`px-4 py-2 rounded text-sm font-medium text-white disabled:opacity-50 ${actionModal.type === 'terminate' ? 'bg-red-600 hover:bg-red-700' : 'bg-orange-600 hover:bg-orange-700'}`}
+              >
+                {submitting ? 'Submitting...' : actionModal.type === 'terminate' ? 'Confirm Termination' : 'Confirm Suspension'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

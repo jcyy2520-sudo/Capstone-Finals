@@ -63,8 +63,8 @@ export default function AppEntriesPage() {
 
   const getActions = (entry) => {
     const actions = [];
-    if (entry.status === 'submitted') {
-      actions.push({ label: 'Accept', action: 'accept', color: 'green' });
+    if (entry.status === 'pending_secretariat_consolidation') {
+      actions.push({ label: 'Consolidate', action: 'accept', color: 'green' });
       actions.push({ label: 'Return', action: 'return', color: 'red' });
     }
     return actions;
@@ -75,17 +75,17 @@ export default function AppEntriesPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-lg font-semibold text-gray-900">Annual Procurement Plan Consolidation</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Manage and accept submitted APP entries</p>
+          <p className="text-sm text-gray-500 mt-0.5">Manage and consolidate budget-certified APP entries before HOPE approval</p>
         </div>
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {[
           { value: '', label: 'All' },
-          { value: 'submitted', label: 'Submitted (Action Required)' },
-          { value: 'pending_budget_certification', label: 'For Budget Cert.' },
+          { value: 'pending_secretariat_consolidation', label: 'Pending Consolidation' },
           { value: 'pending_hope_approval', label: 'For HOPE Approval' },
           { value: 'approved', label: 'Approved' },
+          { value: 'returned', label: 'Returned' },
         ].map(f => (
           <button key={f.value} onClick={() => setFilter(f.value)}
             className={`px-3 py-1.5 text-xs font-medium rounded-full transition ${

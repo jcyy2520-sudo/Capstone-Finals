@@ -23,50 +23,69 @@ use App\Models\User;
 use App\Models\Vendor;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class WorkspaceController extends Controller
 {
+    private const WORKSPACE_CACHE_TTL_SECONDS = 10;
+
     public function summary(Request $request): JsonResponse
     {
         $user = $request->user()->load('role', 'department');
         $roleName = $user->role?->name;
 
-        $context = match ($roleName) {
-            Role::SYSTEM_ADMIN => $this->systemAdminContext($user),
-            Role::HOPE => $this->hopeContext($user),
-            Role::BAC_CHAIRPERSON => $this->bacChairpersonContext($user),
-            Role::BAC_MEMBER => $this->bacMemberContext($user),
-            Role::BAC_SECRETARIAT => $this->bacSecretariatContext($user),
-            Role::TWG_MEMBER => $this->twgMemberContext($user),
-            Role::DEPARTMENT_REQUESTER => $this->departmentRequesterContext($user),
-            Role::BUDGET_OFFICER => $this->budgetOfficerContext($user),
-            Role::FINANCE_OFFICER => $this->financeOfficerContext($user),
-            Role::VENDOR => $this->vendorContext($user),
-            Role::OBSERVER => $this->observerContext($user),
-            Role::INTERNAL_AUDITOR => $this->internalAuditorContext($user),
-            default => $this->genericContext($user),
-        };
+        $payload = Cache::remember(
+            $this->workspaceSummaryCacheKey($user->id, $roleName),
+            now()->addSeconds(self::WORKSPACE_CACHE_TTL_SECONDS),
+            function () use ($user, $roleName) {
+                $context = match ($roleName) {
+                    Role::SYSTEM_ADMIN => $this->systemAdminContext($user),
+                    Role::HOPE => $this->hopeContext($user),
+                    Role::BAC_CHAIRPERSON => $this->bacChairpersonContext($user),
+                    Role::BAC_MEMBER => $this->bacMemberContext($user),
+                    Role::BAC_SECRETARIAT => $this->bacSecretariatContext($user),
+                    Role::TWG_MEMBER => $this->twgMemberContext($user),
+                    Role::PROCUREMENT_OFFICER => $this->procurementOfficerContext($user),
+                    Role::DEPARTMENT_REQUESTER => $this->departmentRequesterContext($user),
+                    Role::DEPARTMENT_HEAD => $this->departmentHeadContext($user),
+                    Role::BUDGET_OFFICER => $this->budgetOfficerContext($user),
+                    Role::FINANCE_OFFICER => $this->financeOfficerContext($user),
+                    Role::VENDOR => $this->vendorContext($user),
+                    Role::INSPECTION_ACCEPTANCE_COMMITTEE => $this->inspectionAcceptanceCommitteeContext($user),
+                    Role::OBSERVER => $this->observerContext($user),
+                    Role::INTERNAL_AUDITOR => $this->internalAuditorContext($user),
+                    default => $this->genericContext($user),
+                };
 
-        return response()->json([
-            'role' => [
-                'name' => $user->role?->name,
-                'display_name' => $user->role?->display_name,
-                'base_path' => $this->resolveRoleBasePath($roleName),
-                'dashboard_path' => $this->resolveRoleBasePath($roleName) ? $this->resolveRoleBasePath($roleName) . '/dashboard' : '/login',
-                'permissions' => $user->role?->permissions ?? [],
-            ],
-            'department' => $user->department ? [
-                'id' => $user->department->id,
-                'name' => $user->department->name,
-                'code' => $user->department->code,
-            ] : null,
-            'cards' => $context['cards'],
-            'highlights' => $context['highlights'],
-            'recent' => $context['recent'],
-            'actions' => $context['actions'],
-            'alert_count' => $context['alert_count'],
-            'generated_at' => now()->toIso8601String(),
-        ]);
+                return [
+                    'role' => [
+                        'name' => $user->role?->name,
+                        'display_name' => $user->role?->display_name,
+                        'base_path' => $this->resolveRoleBasePath($roleName),
+                        'dashboard_path' => $this->resolveRoleBasePath($roleName) ? $this->resolveRoleBasePath($roleName) . '/dashboard' : '/login',
+                        'permissions' => $user->role?->permissions ?? [],
+                    ],
+                    'department' => $user->department ? [
+                        'id' => $user->department->id,
+                        'name' => $user->department->name,
+                        'code' => $user->department->code,
+                    ] : null,
+                    'cards' => $context['cards'],
+                    'highlights' => $context['highlights'],
+                    'recent' => $context['recent'],
+                    'actions' => $context['actions'],
+                    'alert_count' => $context['alert_count'],
+                    'generated_at' => now()->toIso8601String(),
+                ];
+            }
+        );
+
+        return response()->json($payload);
+    }
+
+    private function workspaceSummaryCacheKey(int $userId, ?string $roleName): string
+    {
+        return 'workspace:summary:user:' . $userId . ':role:' . ($roleName ?: 'none');
     }
 
     private function systemAdminContext(User $user): array
@@ -96,7 +115,7 @@ class WorkspaceController extends Controller
 
     private function hopeContext(User $user): array
     {
-        $pendingApprovals = AppEntry::whereIn('status', ['for_budget_certification', 'for_hope_approval'])->count()
+        $pendingApprovals = AppEntry::where('status', 'pending_hope_approval')->count()
             + PurchaseRequisition::whereIn('status', ['pending_dh_endorsement', 'pending_budget_certification', 'pending_secretariat_review'])->count()
             + Invitation::where('status', 'draft')->count()
             + BacResolution::where('status', 'SIGNED')->count()
@@ -189,7 +208,7 @@ class WorkspaceController extends Controller
         return [
             'cards' => [
                 $this->metric('pending_prs', 'Pending PRs', PurchaseRequisition::whereIn('status', ['submitted', 'pending_dh_endorsement', 'pending_budget_certification', 'pending_secretariat_review'])->count(), 'Requests waiting in the queue', 'amber'),
-                $this->metric('app_queue', 'APP Entries', AppEntry::whereIn('status', ['submitted', 'for_budget_certification', 'for_hope_approval'])->count(), 'Planning entries for consolidation', 'blue'),
+                $this->metric('app_queue', 'APP Entries', AppEntry::whereIn('status', ['pending_secretariat_consolidation', 'pending_hope_approval'])->count(), 'Planning entries for consolidation', 'blue'),
                 $this->metric('posted_invitations', 'Posted Invitations', Invitation::where('status', 'posted')->count(), 'Public-facing procurement notices', 'emerald'),
                 $this->metric('registered_vendors', 'Registered Vendors', Vendor::count(), 'Bidder registry records', 'slate'),
             ],
@@ -204,6 +223,29 @@ class WorkspaceController extends Controller
                 $this->action('Invitations', '/secretariat/invitations'),
                 $this->action('Bid Openings', '/secretariat/bid-openings'),
                 $this->action('Bidders', '/secretariat/bidders'),
+            ],
+            'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
+        ];
+    }
+
+    private function procurementOfficerContext(User $user): array
+    {
+        return [
+            'cards' => [
+                $this->metric('app_consolidation', 'APP Consolidation', AppEntry::where('status', 'pending_secretariat_consolidation')->count(), 'Budget-certified APP items awaiting consolidation', 'blue'),
+                $this->metric('pr_review', 'PR Review Queue', PurchaseRequisition::where('status', 'pending_secretariat_review')->count(), 'Requests awaiting procurement review', 'amber'),
+                $this->metric('mode_confirmations', 'Mode Confirmations', PurchaseRequisition::where('status', 'pending_mode_confirmation')->count(), 'Requests waiting for BAC mode confirmation', 'violet'),
+                $this->metric('active_contracts', 'Active Contracts', Contract::where('status', 'active')->count(), 'Contracts currently under implementation', 'emerald'),
+            ],
+            'highlights' => [
+                'Use this workspace for procurement review, contract packaging, and PO-related follow-through.',
+                'This role is separate from Department Head endorsement and IAC acceptance control points.',
+                'Keep requests moving from certified demand into executable procurement records without taking BAC or HOPE actions.',
+            ],
+            'recent' => $this->recentProcurementOfficerItems(),
+            'actions' => [
+                $this->action('Purchase Requisitions', '/procurement/purchase-requisitions'),
+                $this->action('Contracts', '/procurement/contracts'),
             ],
             'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
         ];
@@ -238,19 +280,41 @@ class WorkspaceController extends Controller
             'cards' => [
                 $this->metric('my_app_entries', 'My APP Entries', AppEntry::where('created_by', $user->id)->count(), 'Planning submissions you created', 'blue'),
                 $this->metric('my_prs', 'My PRs', PurchaseRequisition::where('requester_id', $user->id)->count(), 'Requests routed from your office', 'amber'),
-                $this->metric('inspection_tasks', 'Inspection Tasks', InspectionAcceptanceReport::where('accepted_by', $user->id)->count(), 'Deliveries waiting for acceptance', 'emerald'),
+                $this->metric('active_deliveries', 'Active Deliveries', Contract::whereHas('purchaseRequisition', fn ($query) => $query->where('requester_id', $user->id))->where('status', 'active')->count(), 'Contracts your office is currently monitoring', 'emerald'),
                 $this->metric('returned_items', 'Returned Items', PurchaseRequisition::where('requester_id', $user->id)->where('status', 'returned')->count(), 'Items that need correction', 'rose'),
             ],
             'highlights' => [
-                'This workspace is for creating APP entries, preparing PRs, and closing the loop on inspections.',
+                'This workspace is for creating APP entries, preparing PRs, and confirming that deliveries reached your office.',
                 'You only see records tied to your department and your submissions.',
-                'The inspection queue tells you what still needs acceptance or correction.',
+                'Inspection and acceptance is owned by the Inspection and Acceptance Committee, not by the requester.',
             ],
             'recent' => $this->recentRequesterItems($user),
             'actions' => [
                 $this->action('Annual Plan', '/requester/app'),
                 $this->action('Purchase Requisitions', '/requester/purchase-requisitions'),
-                $this->action('Inspections', '/requester/inspections'),
+            ],
+            'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
+        ];
+    }
+
+    private function departmentHeadContext(User $user): array
+    {
+        return [
+            'cards' => [
+                $this->metric('app_endorsements', 'APP Endorsements', AppEntry::where('department_id', $user->department_id)->where('status', 'submitted')->count(), 'Department APP items awaiting your endorsement', 'blue'),
+                $this->metric('pr_endorsements', 'PR Endorsements', PurchaseRequisition::where('department_id', $user->department_id)->where('status', 'pending_dh_endorsement')->count(), 'Requests waiting for departmental action', 'amber'),
+                $this->metric('returned_items', 'Returned Items', AppEntry::where('department_id', $user->department_id)->where('status', 'returned')->count() + PurchaseRequisition::where('department_id', $user->department_id)->where('status', 'returned')->count(), 'Records that need department correction', 'rose'),
+                $this->metric('approved_app', 'Approved APP Items', AppEntry::where('department_id', $user->department_id)->where('status', 'approved')->count(), 'Approved planning items for your office', 'emerald'),
+            ],
+            'highlights' => [
+                'This workspace is limited to department endorsement and return actions.',
+                'Department Head approval is separate from requester entry and from later BAC, IAC, and Finance controls.',
+                'Use endorsement only after checking necessity, completeness, and departmental priority.',
+            ],
+            'recent' => $this->recentDepartmentHeadItems($user),
+            'actions' => [
+                $this->action('APP Endorsements', '/department-head/app'),
+                $this->action('PR Endorsements', '/department-head/purchase-requisitions'),
             ],
             'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
         ];
@@ -262,7 +326,7 @@ class WorkspaceController extends Controller
 
         return [
             'cards' => [
-                $this->metric('app_certification', 'APP for Certification', AppEntry::where('status', 'for_budget_certification')->count(), 'Planning lines awaiting certification', 'blue'),
+                $this->metric('app_certification', 'APP for Certification', AppEntry::where('status', 'pending_budget_certification')->count(), 'Planning lines awaiting certification', 'blue'),
                 $this->metric('pr_certification', 'PRs for Certification', PurchaseRequisition::where('status', 'pending_budget_certification')->count(), 'Requests awaiting fund confirmation', 'amber'),
                 $this->metric('reserved_value', 'Reserved Value', $reservedValue, 'Soft reservations already claimed', 'emerald'),
                 $this->metric('returned_items', 'Returned Items', PurchaseRequisition::where('status', 'returned')->count(), 'Budget checks needing resubmission', 'rose'),
@@ -277,6 +341,28 @@ class WorkspaceController extends Controller
                 $this->action('Budget Certification', '/budget/certification'),
                 $this->action('Annual Plan', '/budget/app'),
                 $this->action('Purchase Requisitions', '/budget/purchase-requisitions'),
+            ],
+            'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
+        ];
+    }
+
+    private function inspectionAcceptanceCommitteeContext(User $user): array
+    {
+        return [
+            'cards' => [
+                $this->metric('inspected_queue', 'Awaiting Acceptance', InspectionAcceptanceReport::where('status', 'inspected')->count(), 'Inspection reports waiting for final acceptance', 'amber'),
+                $this->metric('accepted_reports', 'Accepted Deliveries', InspectionAcceptanceReport::where('status', 'accepted')->count(), 'Completed acceptance records', 'emerald'),
+                $this->metric('rejected_reports', 'Rejected Deliveries', InspectionAcceptanceReport::where('status', 'rejected')->count(), 'Deliveries sent back for correction', 'rose'),
+                $this->metric('active_contracts', 'Active Contracts', Contract::where('status', 'active')->count(), 'Contracts still generating inspection work', 'blue'),
+            ],
+            'highlights' => [
+                'The IAC owns formal inspection and IAR completion after delivery reaches the end-user unit.',
+                'This role does not award contracts, endorse requests, or release payments.',
+                'Use the inspection queue to create, accept, or reject IARs based on PO and contract compliance.',
+            ],
+            'recent' => $this->recentInspectionCommitteeItems(),
+            'actions' => [
+                $this->action('Inspections', '/iac/inspections'),
             ],
             'alert_count' => ProcurementNotification::where('recipient_id', $user->id)->whereNull('read_at')->count(),
         ];
@@ -360,7 +446,7 @@ class WorkspaceController extends Controller
     {
         return [
             'cards' => [
-                $this->metric('visible_records', 'Visible Records', AppEntry::whereIn('status', ['approved', 'for_hope_approval', 'for_budget_certification'])->count(), 'Procurements available for observation', 'blue'),
+                $this->metric('visible_records', 'Visible Records', AppEntry::whereIn('status', ['approved', 'pending_hope_approval', 'pending_secretariat_consolidation', 'pending_budget_certification'])->count(), 'Procurements available for observation', 'blue'),
                 $this->metric('blockchain_events', 'Blockchain Events', BlockchainEvent::count(), 'Immutable event ledger entries', 'emerald'),
                 $this->metric('audit_logs', 'Audit Logs', AuditLog::count(), 'Operational history available for review', 'amber'),
                 $this->metric('completed_sessions', 'Completed Sessions', BidOpening::where('status', 'CLOSED')->count(), 'Opening sessions already finalized', 'violet'),
@@ -447,7 +533,7 @@ class WorkspaceController extends Controller
     private function recentApprovals(int $limit = 5): array
     {
         return collect()
-            ->merge(AppEntry::whereIn('status', ['for_budget_certification', 'for_hope_approval'])->latest()->limit($limit)->get()->map(function (AppEntry $entry) {
+            ->merge(AppEntry::whereIn('status', ['pending_secretariat_consolidation', 'pending_hope_approval'])->latest()->limit($limit)->get()->map(function (AppEntry $entry) {
                 return [
                     'title' => $entry->project_title,
                     'meta' => 'APP Entry · ' . ($entry->mode ?? 'n/a'),
@@ -460,6 +546,33 @@ class WorkspaceController extends Controller
                 return [
                     'title' => $pr->pr_reference,
                     'meta' => 'PR · ' . number_format((float) $pr->total_value, 2),
+                    'status' => $pr->status,
+                    'timestamp' => optional($pr->submitted_at ?? $pr->created_at)->toIso8601String(),
+                    'note' => $pr->purpose,
+                ];
+            }))
+            ->sortByDesc('timestamp')
+            ->take($limit)
+            ->values()
+            ->all();
+    }
+
+    private function recentProcurementOfficerItems(int $limit = 5): array
+    {
+        return collect()
+            ->merge(AppEntry::where('status', 'pending_secretariat_consolidation')->latest()->limit($limit)->get()->map(function (AppEntry $entry) {
+                return [
+                    'title' => $entry->project_title,
+                    'meta' => 'APP consolidation · ' . ($entry->department?->code ?? 'office'),
+                    'status' => $entry->status,
+                    'timestamp' => optional($entry->created_at)->toIso8601String(),
+                    'note' => $entry->justification,
+                ];
+            }))
+            ->merge(PurchaseRequisition::whereIn('status', ['pending_secretariat_review', 'pending_mode_confirmation', 'mode_confirmed'])->latest()->limit($limit)->get()->map(function (PurchaseRequisition $pr) {
+                return [
+                    'title' => $pr->pr_reference,
+                    'meta' => 'Procurement review · ' . number_format((float) $pr->total_value, 2),
                     'status' => $pr->status,
                     'timestamp' => optional($pr->submitted_at ?? $pr->created_at)->toIso8601String(),
                     'note' => $pr->purpose,
@@ -546,11 +659,8 @@ class WorkspaceController extends Controller
 
     private function recentRequesterItems(User $user, int $limit = 5): array
     {
-        return AppEntry::where('created_by', $user->id)
-            ->latest()
-            ->limit($limit)
-            ->get()
-            ->map(function (AppEntry $entry) {
+        return collect()
+            ->merge(AppEntry::where('created_by', $user->id)->latest()->limit($limit)->get()->map(function (AppEntry $entry) {
                 return [
                     'title' => $entry->project_title,
                     'meta' => $entry->mfo_name_snapshot ?? $entry->category ?? 'APP entry',
@@ -558,7 +668,45 @@ class WorkspaceController extends Controller
                     'timestamp' => optional($entry->submitted_at ?? $entry->created_at)->toIso8601String(),
                     'note' => $entry->justification,
                 ];
-            })
+            }))
+            ->merge(PurchaseRequisition::where('requester_id', $user->id)->latest()->limit($limit)->get()->map(function (PurchaseRequisition $pr) {
+                return [
+                    'title' => $pr->pr_reference,
+                    'meta' => 'PR · ' . number_format((float) $pr->total_value, 2),
+                    'status' => $pr->status,
+                    'timestamp' => optional($pr->submitted_at ?? $pr->created_at)->toIso8601String(),
+                    'note' => $pr->purpose,
+                ];
+            }))
+            ->sortByDesc('timestamp')
+            ->take($limit)
+            ->values()
+            ->all();
+    }
+
+    private function recentDepartmentHeadItems(User $user, int $limit = 5): array
+    {
+        return collect()
+            ->merge(AppEntry::where('department_id', $user->department_id)->whereIn('status', ['submitted', 'returned'])->latest()->limit($limit)->get()->map(function (AppEntry $entry) {
+                return [
+                    'title' => $entry->project_title,
+                    'meta' => 'APP endorsement · ' . ($entry->department?->code ?? 'office'),
+                    'status' => $entry->status,
+                    'timestamp' => optional($entry->submitted_at ?? $entry->created_at)->toIso8601String(),
+                    'note' => $entry->justification,
+                ];
+            }))
+            ->merge(PurchaseRequisition::where('department_id', $user->department_id)->whereIn('status', ['pending_dh_endorsement', 'returned'])->latest()->limit($limit)->get()->map(function (PurchaseRequisition $pr) {
+                return [
+                    'title' => $pr->pr_reference,
+                    'meta' => 'PR endorsement · ' . number_format((float) $pr->total_value, 2),
+                    'status' => $pr->status,
+                    'timestamp' => optional($pr->submitted_at ?? $pr->created_at)->toIso8601String(),
+                    'note' => $pr->purpose,
+                ];
+            }))
+            ->sortByDesc('timestamp')
+            ->take($limit)
             ->values()
             ->all();
     }
@@ -576,6 +724,25 @@ class WorkspaceController extends Controller
                     'status' => $pr->status,
                     'timestamp' => optional($pr->submitted_at ?? $pr->created_at)->toIso8601String(),
                     'note' => $pr->purpose,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function recentInspectionCommitteeItems(int $limit = 5): array
+    {
+        return InspectionAcceptanceReport::with('contract')
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(function (InspectionAcceptanceReport $iar) {
+                return [
+                    'title' => 'IAR-' . str_pad((string) $iar->id, 4, '0', STR_PAD_LEFT),
+                    'meta' => $iar->contract?->contract_reference ?? 'Inspection report',
+                    'status' => $iar->status,
+                    'timestamp' => optional($iar->inspected_at ?? $iar->created_at)->toIso8601String(),
+                    'note' => $iar->inspection_remarks,
                 ];
             })
             ->values()
@@ -646,10 +813,13 @@ class WorkspaceController extends Controller
             Role::BAC_SECRETARIAT => '/secretariat',
             Role::BAC_MEMBER => '/bac-member',
             Role::TWG_MEMBER => '/twg',
+            Role::PROCUREMENT_OFFICER => '/procurement',
             Role::DEPARTMENT_REQUESTER => '/requester',
+            Role::DEPARTMENT_HEAD => '/department-head',
             Role::BUDGET_OFFICER => '/budget',
             Role::FINANCE_OFFICER => '/finance',
             Role::VENDOR => '/vendor',
+            Role::INSPECTION_ACCEPTANCE_COMMITTEE => '/iac',
             Role::OBSERVER => '/observer',
             Role::INTERNAL_AUDITOR => '/auditor',
             default => null,

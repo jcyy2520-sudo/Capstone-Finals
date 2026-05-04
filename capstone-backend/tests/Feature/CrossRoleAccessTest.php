@@ -48,7 +48,7 @@ class CrossRoleAccessTest extends TestCase
     {
         $this->actingAsRole('observer');
 
-        $response = $this->getJson('/api/users');
+        $response = $this->getJson('/api/admin/users');
         $response->assertStatus(403);
     }
 
@@ -68,7 +68,7 @@ class CrossRoleAccessTest extends TestCase
     {
         $this->actingAsRole('vendor');
 
-        $response = $this->postJson('/api/bid-openings', []);
+        $response = $this->postJson('/api/bid-openings/start', []);
         $response->assertStatus(403);
     }
 
@@ -76,7 +76,7 @@ class CrossRoleAccessTest extends TestCase
     {
         $this->actingAsRole('vendor');
 
-        $response = $this->postJson('/api/bid-openings/1/evaluate', []);
+        $response = $this->getJson('/api/evaluations');
         $response->assertStatus(403);
     }
 
@@ -86,7 +86,7 @@ class CrossRoleAccessTest extends TestCase
     {
         $this->actingAsRole('department_requester');
 
-        $response = $this->getJson('/api/users');
+        $response = $this->getJson('/api/admin/users');
         $response->assertStatus(403);
     }
 
@@ -132,7 +132,7 @@ class CrossRoleAccessTest extends TestCase
     {
         $this->actingAsRole('bac_member');
 
-        $response = $this->getJson('/api/users');
+        $response = $this->getJson('/api/admin/users');
         $response->assertStatus(403);
     }
 }

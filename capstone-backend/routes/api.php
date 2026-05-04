@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
+use App\Models\User;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\VendorRegistrationController;
 use App\Http\Controllers\Admin\AuditLogController;
@@ -166,6 +168,18 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
         return response()->json(\App\Models\Department::orderBy('name')->get());
     });
 
+    Route::get('/committee-members', function () {
+        $committeeMembers = User::with('role:id,name,display_name')
+            ->where('status', 'active')
+            ->whereHas('role', function ($query) {
+                $query->whereIn('name', ['bac_chairperson', 'bac_member', 'bac_secretariat']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'role_id', 'name', 'status']);
+
+        return response()->json(['data' => $committeeMembers]);
+    })->middleware('role:bac_secretariat,bac_chairperson,system_admin');
+
     // ── APP (Annual Procurement Plan) Module ────────────
     Route::prefix('app-entries')->group(function () {
         Route::get('/mode-recommendation', [AppEntryController::class, 'modeRecommendation'])
@@ -188,20 +202,24 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
         // Status transitions
         Route::post('/{appEntry}/submit', [AppEntryController::class, 'submit'])
             ->middleware('permission:app,create');
+        Route::post('/{appEntry}/endorse', [AppEntryController::class, 'endorse'])
+            ->middleware('role:department_head,system_admin');
         Route::post('/{appEntry}/accept', [AppEntryController::class, 'accept'])
-            ->middleware('role:bac_secretariat,system_admin');
+            ->middleware('role:bac_secretariat,procurement_officer,system_admin');
         Route::post('/{appEntry}/certify-budget', [AppEntryController::class, 'certifyBudget'])
             ->middleware('role:budget_officer,system_admin');
         Route::post('/{appEntry}/approve', [AppEntryController::class, 'approve'])
             ->middleware('role:hope,system_admin');
         Route::post('/{appEntry}/return', [AppEntryController::class, 'returnEntry'])
-            ->middleware('role:hope,bac_secretariat,system_admin');
+            ->middleware('role:department_head,budget_officer,bac_secretariat,procurement_officer,hope,system_admin');
     });
 
     // ── Purchase Requisition Module ─────────────────────
     Route::prefix('purchase-requisitions')->group(function () {
         Route::get('/', [PurchaseRequisitionController::class, 'index'])
             ->middleware('permission:purchase_requisition,view');
+        Route::get('/mode-confirmation-queue', [PurchaseRequisitionController::class, 'modeConfirmationQueue'])
+            ->middleware('role:bac_chairperson,system_admin');
         Route::post('/', [PurchaseRequisitionController::class, 'store'])
             ->middleware('permission:purchase_requisition,create');
         Route::get('/{purchaseRequisition}', [PurchaseRequisitionController::class, 'show'])
@@ -215,13 +233,13 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
         Route::post('/{purchaseRequisition}/submit', [PurchaseRequisitionController::class, 'submit'])
             ->middleware('permission:purchase_requisition,create');
         Route::post('/{purchaseRequisition}/endorse', [PurchaseRequisitionController::class, 'endorse'])
-            ->middleware('role:department_requester,hope,system_admin');
+            ->middleware('role:department_head,system_admin');
         Route::post('/{purchaseRequisition}/certify-budget', [PurchaseRequisitionController::class, 'certifyBudget'])
             ->middleware('role:budget_officer,system_admin');
         Route::post('/{purchaseRequisition}/accept', [PurchaseRequisitionController::class, 'accept'])
-            ->middleware('role:bac_secretariat,system_admin');
+            ->middleware('role:bac_secretariat,procurement_officer,system_admin');
         Route::post('/{purchaseRequisition}/return', [PurchaseRequisitionController::class, 'returnPr'])
-            ->middleware('role:hope,bac_secretariat,budget_officer,department_requester,system_admin');
+            ->middleware('role:department_head,hope,bac_secretariat,procurement_officer,budget_officer,bac_chairperson,system_admin');
         Route::post('/{purchaseRequisition}/confirm-mode', [PurchaseRequisitionController::class, 'confirmMode'])
             ->middleware('role:bac_chairperson,system_admin');
     });
@@ -359,7 +377,7 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
         Route::get('/{contract}/inspections', [InspectionAcceptanceReportController::class, 'index'])
             ->middleware('permission:contract,view');
         Route::post('/{contract}/inspections', [InspectionAcceptanceReportController::class, 'store'])
-            ->middleware('role:department_requester,system_admin');
+            ->middleware('role:inspection_acceptance_committee,system_admin');
     });
 
     // ── Inspection Acceptance Reports (global) ───────────
@@ -367,9 +385,9 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
         Route::get('/', [InspectionAcceptanceReportController::class, 'all'])
             ->middleware('permission:contract,view');
         Route::put('/{iar}/accept', [InspectionAcceptanceReportController::class, 'accept'])
-            ->middleware('role:supply_officer,bac_secretariat,system_admin');
+            ->middleware('role:inspection_acceptance_committee,system_admin');
         Route::put('/{iar}/reject', [InspectionAcceptanceReportController::class, 'reject'])
-            ->middleware('role:supply_officer,bac_secretariat,system_admin');
+            ->middleware('role:inspection_acceptance_committee,system_admin');
     });
 
     // ── Invoice Module ──────────────────────────────────
@@ -398,11 +416,29 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
     // ── Blockchain Audit Trail ──────────────────────────
     Route::prefix('blockchain')->group(function () {
         Route::middleware('permission:blockchain,view')->group(function () {
-            Route::get('/events', function () {
-                return response()->json(\App\Models\BlockchainEvent::with(['actor.role'])->orderBy('block_number', 'desc')->paginate(20));
+            Route::get('/events', function (Request $request) {
+                $page = (int) $request->input('page', 1);
+                $perPage = (int) $request->input('per_page', 20);
+
+                $payload = Cache::remember(
+                    "blockchain:events:page:{$page}:per-page:{$perPage}",
+                    now()->addSeconds(15),
+                    fn () => \App\Models\BlockchainEvent::with(['actor.role'])
+                        ->orderBy('block_number', 'desc')
+                        ->paginate($perPage)
+                        ->toArray()
+                );
+
+                return response()->json($payload);
             });
             Route::get('/verify-chain', function () {
-                return response()->json(\App\Models\BlockchainEvent::verifyChainIntegrity());
+                $payload = Cache::remember(
+                    'blockchain:verify-chain',
+                    now()->addSeconds(15),
+                    fn () => \App\Models\BlockchainEvent::verifyChainIntegrity()
+                );
+
+                return response()->json($payload);
             });
         });
     });
@@ -433,7 +469,7 @@ Route::middleware(['auth:sanctum', '2fa.verified', 'throttle:api'])->group(funct
 
     // ── Reports & Analytics ─────────────────────────────
     Route::prefix('reports')->group(function () {
-        Route::middleware('role:system_admin,hope,internal_auditor,observer')->group(function () {
+        Route::middleware('role:system_admin,hope,bac_chairperson,bac_secretariat,procurement_officer,budget_officer,finance_officer,internal_auditor,observer')->group(function () {
             Route::get('/summary', [ReportController::class, 'summary']);
             Route::get('/by-mode', [ReportController::class, 'byMode']);
             Route::get('/by-department', [ReportController::class, 'byDepartment']);

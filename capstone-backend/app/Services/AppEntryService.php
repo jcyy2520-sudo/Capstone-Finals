@@ -47,7 +47,7 @@ class AppEntryService
     }
 
     /**
-     * Submit entry for BAC Secretariat consolidation.
+        * Submit entry for Department Head endorsement.
      */
     public function submit(AppEntry $entry, int $userId): AppEntry
     {
@@ -73,19 +73,37 @@ class AppEntryService
     }
 
     /**
-     * Secretariat accepts entry for APP consolidation.
+     * Department Head endorses the APP entry.
      */
-    public function acceptForConsolidation(AppEntry $entry, int $userId): AppEntry
+    public function endorse(AppEntry $entry, int $userId): AppEntry
     {
         if ($entry->status !== 'submitted') {
-            throw new \InvalidArgumentException('Only submitted entries can be accepted.');
+            throw new \InvalidArgumentException('Only submitted entries can be endorsed.');
         }
 
         $entry->update([
             'status' => 'pending_budget_certification',
         ]);
 
-        AuditLog::log('APP_ENTRY_ACCEPTED', $userId, 'App\Models\AppEntry', $entry->id);
+        AuditLog::log('APP_ENTRY_ENDORSED', $userId, 'App\Models\AppEntry', $entry->id);
+
+        return $entry->fresh();
+    }
+
+    /**
+     * Secretariat or Procurement Officer consolidates the endorsed entry.
+     */
+    public function acceptForConsolidation(AppEntry $entry, int $userId): AppEntry
+    {
+        if ($entry->status !== 'pending_secretariat_consolidation') {
+            throw new \InvalidArgumentException('Only budget-certified entries can be consolidated.');
+        }
+
+        $entry->update([
+            'status' => 'pending_hope_approval',
+        ]);
+
+        AuditLog::log('APP_ENTRY_CONSOLIDATED', $userId, 'App\Models\AppEntry', $entry->id);
 
         return $entry->fresh();
     }
@@ -100,7 +118,7 @@ class AppEntryService
         }
 
         $entry->update([
-            'status' => 'pending_hope_approval',
+            'status' => 'pending_secretariat_consolidation',
             'budget_certified_by' => $userId,
             'budget_certified_at' => now(),
         ]);

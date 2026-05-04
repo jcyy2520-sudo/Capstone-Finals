@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Department;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Department\StorePurchaseRequisitionRequest;
 use App\Models\PurchaseRequisition;
+use App\Models\Role;
 use App\Services\PurchaseRequisitionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -24,18 +25,21 @@ class PurchaseRequisitionController extends Controller
         $user = $request->user();
 
         // Role-based filtering
-        if ($user->hasRole('department_requester')) {
+        if ($user->hasRole(Role::DEPARTMENT_REQUESTER)) {
             $query->where('department_id', $user->department_id);
-        } elseif ($user->hasRole('budget_officer')) {
+        } elseif ($user->hasRole(Role::DEPARTMENT_HEAD)) {
+            $query->where('department_id', $user->department_id)
+                ->whereIn('status', ['pending_dh_endorsement', 'returned', 'pending_budget_certification', 'accepted']);
+        } elseif ($user->hasRole(Role::BUDGET_OFFICER)) {
             $query->whereIn('status', ['pending_budget_certification', 'pending_secretariat_review', 'accepted']);
-        } elseif ($user->hasRole('bac_secretariat')) {
+        } elseif ($user->hasAnyRole([Role::BAC_SECRETARIAT, Role::PROCUREMENT_OFFICER])) {
             // Secretariat sees everything from budget review onwards or according to filters
             $query->whereIn('status', [
                 'pending_budget_certification', 'pending_secretariat_review', 
                 'pending_mode_confirmation', 'mode_confirmed', 'accepted',
                 'returned', 'cancelled'
             ]);
-        } elseif ($user->hasRole('bac_chairperson')) {
+        } elseif ($user->hasRole(Role::BAC_CHAIRPERSON)) {
             // Chairperson sees PRs pending mode confirmation
             $query->whereIn('status', [
                 'pending_mode_confirmation', 'mode_confirmed', 'accepted'
@@ -57,6 +61,19 @@ class PurchaseRequisitionController extends Controller
         }
 
         $prs = $query->orderBy('created_at', 'desc')->paginate($request->get('per_page', 15));
+
+        return response()->json($prs);
+    }
+
+    /**
+     * GET /api/purchase-requisitions/mode-confirmation-queue
+     */
+    public function modeConfirmationQueue(Request $request): JsonResponse
+    {
+        $prs = PurchaseRequisition::with(['department', 'requester', 'appEntry', 'latestBlockchainEvent'])
+            ->where('status', 'pending_mode_confirmation')
+            ->orderByDesc('created_at')
+            ->paginate($request->get('per_page', 15));
 
         return response()->json($prs);
     }

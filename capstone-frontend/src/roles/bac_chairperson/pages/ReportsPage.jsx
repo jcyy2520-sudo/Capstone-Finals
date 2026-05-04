@@ -2,25 +2,69 @@ import { useState, useEffect } from 'react';
 import { BarChart3, FileText, Clock, AlertTriangle } from 'lucide-react';
 import api from '../../../services/api';
 
+const normalizeModeBreakdown = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload.map((item) => ({
+      procurement_mode: item?.procurement_mode || item?.mode || 'unknown',
+      count: Number(item?.count ?? 0),
+      total_value: item?.total_value,
+    }));
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.entries(payload).map(([procurement_mode, count]) => ({
+      procurement_mode,
+      count: Number(count ?? 0),
+    }));
+  }
+
+  return [];
+};
+
+const normalizeStatusBreakdown = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+
+  return Object.entries(payload).flatMap(([module, statuses]) => {
+    if (Array.isArray(statuses)) {
+      return statuses.map((item) => ({
+        module,
+        status: item?.status || 'unknown',
+        count: Number(item?.count ?? 0),
+      }));
+    }
+
+    return Object.entries(statuses || {}).map(([status, count]) => ({
+      module,
+      status,
+      count: Number(count ?? 0),
+    }));
+  });
+};
+
 export default function ReportsPage() {
   const [summary, setSummary] = useState(null);
   const [byMode, setByMode] = useState([]);
   const [byStatus, setByStatus] = useState([]);
+  const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       try {
-        const [sumRes, modeRes, statusRes] = await Promise.allSettled([
+        const [sumRes, modeRes, statusRes, timelineRes] = await Promise.allSettled([
           api.get('/reports/summary', { signal: controller.signal }),
           api.get('/reports/by-mode', { signal: controller.signal }),
           api.get('/reports/by-status', { signal: controller.signal }),
+          api.get('/reports/timeline-compliance', { signal: controller.signal }),
         ]);
         if (!controller.signal.aborted) {
           if (sumRes.status === 'fulfilled') setSummary(sumRes.value.data);
-          if (modeRes.status === 'fulfilled') setByMode(modeRes.value.data?.data || modeRes.value.data || []);
-          if (statusRes.status === 'fulfilled') setByStatus(statusRes.value.data?.data || statusRes.value.data || []);
+          if (modeRes.status === 'fulfilled') setByMode(normalizeModeBreakdown(modeRes.value.data?.data || modeRes.value.data || []));
+          if (statusRes.status === 'fulfilled') setByStatus(normalizeStatusBreakdown(statusRes.value.data?.data || statusRes.value.data || []));
+          if (timelineRes.status === 'fulfilled') setTimeline(timelineRes.value.data);
         }
       } catch (err) {
         if (err?.name === 'CanceledError') return;
@@ -31,6 +75,13 @@ export default function ReportsPage() {
     load();
     return () => controller.abort();
   }, []);
+
+  const pendingActions = byStatus
+    .filter((item) => item.status?.includes('pending'))
+    .reduce((total, item) => total + Number(item.count ?? 0), 0);
+  const totalProcurements = Number(summary?.total_prs ?? summary?.total_app_entries ?? 0);
+  const activeItems = Number(summary?.active_invitations ?? 0) + Number(summary?.active_contracts ?? 0);
+  const overdueItems = Number(timeline?.overdue_contracts ?? 0);
 
   return (
     <div className="space-y-4">
@@ -45,10 +96,10 @@ export default function ReportsPage() {
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard icon={FileText} label="Total Procurements" value={summary?.total_procurements ?? 0} />
-            <StatCard icon={BarChart3} label="Active Items" value={summary?.active_items ?? 0} />
-            <StatCard icon={Clock} label="Pending Actions" value={summary?.pending_actions ?? 0} tone={summary?.pending_actions > 0 ? 'amber' : undefined} />
-            <StatCard icon={AlertTriangle} label="Overdue Items" value={summary?.overdue_items ?? 0} tone={summary?.overdue_items > 0 ? 'red' : undefined} />
+            <StatCard icon={FileText} label="Total Procurements" value={totalProcurements} />
+            <StatCard icon={BarChart3} label="Active Items" value={activeItems} />
+            <StatCard icon={Clock} label="Pending Actions" value={pendingActions} tone={pendingActions > 0 ? 'amber' : undefined} />
+            <StatCard icon={AlertTriangle} label="Overdue Items" value={overdueItems} tone={overdueItems > 0 ? 'red' : undefined} />
           </div>
 
           {/* By Procurement Mode */}
@@ -92,6 +143,7 @@ export default function ReportsPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-left">
                     <tr>
+                      <th className="px-3 py-2.5 font-medium text-gray-600">Module</th>
                       <th className="px-3 py-2.5 font-medium text-gray-600">Status</th>
                       <th className="px-3 py-2.5 font-medium text-gray-600">Count</th>
                     </tr>
@@ -99,6 +151,7 @@ export default function ReportsPage() {
                   <tbody className="divide-y divide-gray-100">
                     {byStatus.map((item, i) => (
                       <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-3 py-2.5 text-gray-700 text-xs capitalize">{(item.module || '—').replace(/_/g, ' ')}</td>
                         <td className="px-3 py-2.5 text-gray-900 text-xs capitalize">{(item.status || '—').replace(/_/g, ' ')}</td>
                         <td className="px-3 py-2.5 text-gray-700 text-xs font-semibold">{item.count ?? 0}</td>
                       </tr>

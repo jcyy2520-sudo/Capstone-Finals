@@ -1,0 +1,1 @@
+export { default } from '../../bac_secretariat/pages/PurchaseRequisitionsPage';

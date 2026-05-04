@@ -30,14 +30,13 @@ return new class extends Migration
             $table->string('ntp_document_hash', 64)->nullable();
             $table->date('ntp_date')->nullable(); // Day 1 of contract implementation
             $table->enum('status', [
-                'pending_hope_approval',
-                'hope_approved',
-                'noa_issued',
-                'noa_acknowledged',
-                'ntp_issued',
-                'cancelled',
-                're_award',
-            ])->default('pending_hope_approval');
+                'DRAFT',
+                'ISSUED',
+                'ACKNOWLEDGED',
+                'NTP_ISSUED',
+                'CANCELLED',
+                'RE_AWARD',
+            ])->default('DRAFT');
             $table->foreignId('hope_signed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('hope_signed_at')->nullable();
             $table->timestamp('noa_issued_at')->nullable();

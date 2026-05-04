@@ -1,22 +1,38 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { FileText, CheckCircle, AlertTriangle, Download, Shield } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function DocumentVersionHistory({ entityType, entityId }) {
+  const { user } = useAuth();
   const [versions, setVersions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [verifyResult, setVerifyResult] = useState(null);
 
+  const canViewDocumentRegistry = Boolean(user?.role?.permissions?.blockchain?.view);
+
   useEffect(() => {
+    if (!canViewDocumentRegistry) {
+      setVersions([]);
+      setLoading(false);
+      return;
+    }
+
     if (entityType && entityId) fetchVersions();
-  }, [entityType, entityId]);
+  }, [entityType, entityId, canViewDocumentRegistry]);
 
   const fetchVersions = async () => {
     setLoading(true);
     try {
       const res = await api.get('/documents', { params: { entity_type: entityType, entity_id: entityId } });
       setVersions(res.data || []);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      if (err.response?.status === 403 || err.response?.status === 404) {
+        setVersions([]);
+      } else {
+        console.error(err);
+      }
+    }
     setLoading(false);
   };
 
@@ -29,6 +45,7 @@ export default function DocumentVersionHistory({ entityType, entityId }) {
     }
   };
 
+  if (!canViewDocumentRegistry) return null;
   if (loading) return <div className="text-xs text-gray-400">Loading document history...</div>;
   if (versions.length === 0) return null;
 

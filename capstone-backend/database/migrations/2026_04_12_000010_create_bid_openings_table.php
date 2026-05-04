@@ -33,6 +33,16 @@ return new class extends Migration
                 'completed',
                 'postponed',
                 'failed',
+                'EVALUATION_APPROVED',
+                'POST_QUALIFICATION_ONGOING',
+                'POST_QUALIFICATION_PASSED',
+                'POST_QUALIFICATION_FAILED',
+                'BAC_RESOLUTION_SIGNED',
+                'AWARD_RECOMMENDED',
+                'NOA_ISSUED',
+                'NOA_ACKNOWLEDGED',
+                'AWARD_CANCELLED',
+                'CLOSED',
             ])->default('scheduled');
             $table->foreignId('conducted_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('closed_at')->nullable();

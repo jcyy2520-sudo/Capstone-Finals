@@ -26,7 +26,7 @@ export default function ModeConfirmationPage() {
   const fetchPRs = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/purchase-requisitions', { params: { status: 'pending_mode_confirmation' } });
+      const res = await api.get('/purchase-requisitions/mode-confirmation-queue');
       setPrs(res.data.data || []);
     } catch (err) { toast.error('Failed to load PRs.'); console.error(err); }
     setLoading(false);
@@ -42,7 +42,7 @@ export default function ModeConfirmationPage() {
     setSubmitting(true);
     try {
       await api.post(`/purchase-requisitions/${selectedPr.id}/confirm-mode`, {
-        procurement_mode: overrideMode || selectedPr.recommended_mode
+        confirmed_mode: overrideMode || selectedPr.recommended_mode
       });
       toast.success('Procurement mode confirmed. PR is now ready for invitation creation.');
       setShowModal(false);

@@ -119,6 +119,9 @@ class EvaluationController extends Controller
             ->get();
 
         $summary = EvaluationSummary::where('bid_opening_id', $bidOpening->id)->first();
+        if ($summary) {
+            $summary->setAttribute('ranked_bidders', $this->normalizeRankedBidders($summary->ranked_bidders));
+        }
 
         // Group evaluations by evaluator role
         $twgEvaluations = $evaluations->where('evaluator_role', 'twg_member')->values();
@@ -244,6 +247,7 @@ class EvaluationController extends Controller
     public function approve(Request $request, BidOpening $bidOpening)
     {
         $summary = EvaluationSummary::where('bid_opening_id', $bidOpening->id)->firstOrFail();
+        $rankedBidders = $this->normalizeRankedBidders($summary->ranked_bidders);
 
         if ($summary->status !== 'pending_chairperson_review') {
             return response()->json(['message' => 'Summary is not awaiting your approval.'], 400);
@@ -270,7 +274,7 @@ class EvaluationController extends Controller
                 [
                     'bid_opening_id' => $bidOpening->id,
                     'session_reference' => $bidOpening->session_reference,
-                    'lcb_vendor_id' => $summary->ranked_bidders[0]['vendor_id'] ?? null,
+                    'lcb_vendor_id' => $rankedBidders[0]['vendor_id'] ?? null,
                 ]
             );
 
@@ -326,5 +330,22 @@ class EvaluationController extends Controller
             DB::rollBack();
             return response()->json(['message' => 'Failed to declare failure.', 'error' => $e->getMessage()], 500);
         }
+    }
+
+    private function normalizeRankedBidders(mixed $rankedBidders): array
+    {
+        if (is_array($rankedBidders)) {
+            return array_values($rankedBidders);
+        }
+
+        if (is_string($rankedBidders) && $rankedBidders !== '') {
+            $decoded = json_decode($rankedBidders, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return array_values($decoded);
+            }
+        }
+
+        return [];
     }
 }

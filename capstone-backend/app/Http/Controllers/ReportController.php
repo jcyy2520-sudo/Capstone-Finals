@@ -11,15 +11,18 @@ use App\Models\Invitation;
 use App\Models\PurchaseRequisition;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ReportController extends Controller
 {
+    private const REPORT_CACHE_TTL_SECONDS = 15;
+
     /**
      * Procurement summary statistics for observer/auditor dashboards.
      */
     public function summary(): JsonResponse
     {
-        return response()->json([
+        return $this->cachedJson('reports:summary', fn () => [
             'total_app_entries' => AppEntry::count(),
             'total_prs' => PurchaseRequisition::count(),
             'active_invitations' => Invitation::where('status', 'posted')->count(),
@@ -36,11 +39,18 @@ class ReportController extends Controller
      */
     public function byMode(): JsonResponse
     {
-        $byMode = Invitation::selectRaw('procurement_mode, COUNT(*) as count')
-            ->groupBy('procurement_mode')
-            ->pluck('count', 'procurement_mode');
-
-        return response()->json($byMode);
+        return $this->cachedJson('reports:by-mode', function () {
+            return Invitation::selectRaw('procurement_mode, COUNT(*) as count')
+                ->groupBy('procurement_mode')
+                ->orderBy('procurement_mode')
+                ->get()
+                ->map(fn ($row) => [
+                    'procurement_mode' => $row->procurement_mode,
+                    'count' => (int) $row->count,
+                ])
+                ->values()
+                ->all();
+        });
     }
 
     /**
@@ -48,12 +58,13 @@ class ReportController extends Controller
      */
     public function byDepartment(): JsonResponse
     {
-        $byDept = PurchaseRequisition::join('departments', 'purchase_requisitions.department_id', '=', 'departments.id')
-            ->selectRaw('departments.name as department, COUNT(*) as count')
-            ->groupBy('departments.name')
-            ->pluck('count', 'department');
-
-        return response()->json($byDept);
+        return $this->cachedJson('reports:by-department', function () {
+            return PurchaseRequisition::join('departments', 'purchase_requisitions.department_id', '=', 'departments.id')
+                ->selectRaw('departments.name as department, COUNT(*) as count')
+                ->groupBy('departments.name')
+                ->pluck('count', 'department')
+                ->all();
+        });
     }
 
     /**
@@ -61,11 +72,35 @@ class ReportController extends Controller
      */
     public function byStatus(): JsonResponse
     {
-        return response()->json([
-            'prs' => PurchaseRequisition::selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status'),
-            'invitations' => Invitation::selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status'),
-            'awards' => Award::selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status'),
-            'contracts' => Contract::selectRaw('status, COUNT(*) as count')->groupBy('status')->pluck('count', 'status'),
+        return $this->cachedJson('reports:by-status', fn () => [
+            'prs' => PurchaseRequisition::selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->orderBy('status')
+                ->get()
+                ->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count])
+                ->values()
+                ->all(),
+            'invitations' => Invitation::selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->orderBy('status')
+                ->get()
+                ->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count])
+                ->values()
+                ->all(),
+            'awards' => Award::selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->orderBy('status')
+                ->get()
+                ->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count])
+                ->values()
+                ->all(),
+            'contracts' => Contract::selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->orderBy('status')
+                ->get()
+                ->map(fn ($row) => ['status' => $row->status, 'count' => (int) $row->count])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -74,30 +109,39 @@ class ReportController extends Controller
      */
     public function timelineCompliance(): JsonResponse
     {
-        $avgPrToInvitation = PurchaseRequisition::whereNotNull('approved_at')
-            ->whereHas('invitation')
-            ->with('invitation')
-            ->get()
-            ->filter(fn($pr) => $pr->invitation)
-            ->avg(fn($pr) => $pr->approved_at->diffInDays($pr->invitation->created_at));
+        return $this->cachedJson('reports:timeline-compliance', function () {
+            $avgPrToInvitation = PurchaseRequisition::where(function ($query) {
+                    $query->whereNotNull('accepted_at')
+                        ->orWhereNotNull('submitted_at');
+                })
+                ->whereHas('invitation')
+                ->with('invitation')
+                ->get()
+                ->filter(fn($pr) => $pr->invitation)
+                ->avg(function ($pr) {
+                    $start = $pr->accepted_at ?? $pr->submitted_at ?? $pr->created_at;
 
-        $avgInvitationToAward = Award::whereNotNull('created_at')
-            ->with('invitation')
-            ->get()
-            ->filter(fn($a) => $a->invitation)
-            ->avg(fn($a) => $a->invitation->created_at->diffInDays($a->created_at));
+                    return $start?->diffInDays($pr->invitation->created_at) ?? 0;
+                });
 
-        $overdueContracts = Contract::where('status', 'active')
-            ->whereNotNull('end_date')
-            ->where('end_date', '<', now())
-            ->count();
+            $avgInvitationToAward = Award::whereNotNull('created_at')
+                ->with('invitation')
+                ->get()
+                ->filter(fn($a) => $a->invitation)
+                ->avg(fn($a) => $a->invitation->created_at->diffInDays($a->created_at));
 
-        return response()->json([
-            'avg_pr_to_invitation_days' => round($avgPrToInvitation ?? 0, 1),
-            'avg_invitation_to_award_days' => round($avgInvitationToAward ?? 0, 1),
-            'overdue_contracts' => $overdueContracts,
-            'total_active_contracts' => Contract::where('status', 'active')->count(),
-        ]);
+            $overdueContracts = Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->where('end_date', '<', now())
+                ->count();
+
+            return [
+                'avg_days_pr_to_invitation' => round($avgPrToInvitation ?? 0, 1),
+                'avg_days_invitation_to_award' => round($avgInvitationToAward ?? 0, 1),
+                'overdue_contracts' => $overdueContracts,
+                'total_active_contracts' => Contract::where('status', 'active')->count(),
+            ];
+        });
     }
 
     /**
@@ -105,30 +149,32 @@ class ReportController extends Controller
      */
     public function hopePerformance(): JsonResponse
     {
-        $pendingApprovals = Invitation::where('status', 'pending_hope_approval')->count()
-            + Award::where('status', 'pending_hope_approval')->count();
+        return $this->cachedJson('reports:hope-performance', function () {
+            $pendingApprovals = Invitation::where('status', 'pending_hope_approval')->count()
+                + Award::where('status', Award::STATUS_DRAFT)->count();
 
-        $totalAppBudget = AppEntry::where('status', 'approved')->sum('estimated_budget');
-        $totalContracted = Contract::whereIn('status', ['active', 'completed'])->sum('contract_amount');
-        $savings = $totalAppBudget > 0 ? round((($totalAppBudget - $totalContracted) / $totalAppBudget) * 100, 1) : 0;
+            $totalAppBudget = AppEntry::where('status', 'approved')->sum('abc');
+            $totalContracted = Contract::whereIn('status', ['active', 'completed'])->sum('contract_amount');
+            $savings = $totalAppBudget > 0 ? round((($totalAppBudget - $totalContracted) / $totalAppBudget) * 100, 1) : 0;
 
-        $overdueCount = Contract::where('status', 'active')
-            ->whereNotNull('end_date')
-            ->where('end_date', '<', now())
-            ->count();
+            $overdueCount = Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->where('end_date', '<', now())
+                ->count();
 
-        $monthlyAwards = Award::where('created_at', '>=', now()->subDays(30))->count();
+            $monthlyAwards = Award::where('created_at', '>=', now()->subDays(30))->count();
 
-        return response()->json([
-            'pending_approvals' => $pendingApprovals,
-            'overdue_procurements' => $overdueCount,
-            'awards_this_month' => $monthlyAwards,
-            'total_app_budget' => $totalAppBudget,
-            'total_contracted' => $totalContracted,
-            'savings_percentage' => max(0, $savings),
-            'active_contracts' => Contract::where('status', 'active')->count(),
-            'completed_contracts' => Contract::where('status', 'completed')->count(),
-        ]);
+            return [
+                'pending_approvals' => $pendingApprovals,
+                'overdue_procurements' => $overdueCount,
+                'awards_this_month' => $monthlyAwards,
+                'total_app_budget' => $totalAppBudget,
+                'total_contracted' => $totalContracted,
+                'savings_percentage' => max(0, $savings),
+                'active_contracts' => Contract::where('status', 'active')->count(),
+                'completed_contracts' => Contract::where('status', 'completed')->count(),
+            ];
+        });
     }
 
     /**
@@ -136,19 +182,22 @@ class ReportController extends Controller
      */
     public function procurementRegister(Request $request): JsonResponse
     {
-        $query = Invitation::with(['purchaseRequisition.department', 'award.vendor'])
-            ->orderByDesc('created_at');
+        $filters = $request->only(['page', 'per_page', 'mode', 'status']);
+        ksort($filters);
 
-        if ($request->has('mode')) {
-            $query->where('procurement_mode', $request->input('mode'));
-        }
-        if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
-        }
+        return $this->cachedJson('reports:procurement-register:' . md5(json_encode($filters)), function () use ($request) {
+            $query = Invitation::with(['purchaseRequisition.department', 'award.vendor'])
+                ->orderByDesc('created_at');
 
-        $records = $query->paginate($request->input('per_page', 20));
+            if ($request->has('mode')) {
+                $query->where('procurement_mode', $request->input('mode'));
+            }
+            if ($request->has('status')) {
+                $query->where('status', $request->input('status'));
+            }
 
-        return response()->json($records);
+            return $query->paginate($request->input('per_page', 20))->toArray();
+        }, 10);
     }
 
     /**
@@ -156,69 +205,76 @@ class ReportController extends Controller
      */
     public function riskIndicators(): JsonResponse
     {
-        $flags = [];
+        return $this->cachedJson('reports:risk-indicators', function () {
+            $flags = [];
 
-        // Contracts nearing deadline (>90% elapsed)
-        $nearingDeadline = Contract::where('status', 'active')
-            ->whereNotNull('end_date')
-            ->whereNotNull('ntp_date')
-            ->get()
-            ->filter(function ($c) {
-                $total = $c->ntp_date->diffInDays($c->end_date);
-                $elapsed = $c->ntp_date->diffInDays(now());
-                return $total > 0 && ($elapsed / $total) >= 0.9;
-            });
+            $nearingDeadline = Contract::where('status', 'active')
+                ->whereNotNull('end_date')
+                ->whereNotNull('ntp_date')
+                ->get()
+                ->filter(function ($contract) {
+                    $total = $contract->ntp_date->diffInDays($contract->end_date);
+                    $elapsed = $contract->ntp_date->diffInDays(now());
 
-        foreach ($nearingDeadline as $c) {
-            $flags[] = [
-                'type' => 'deadline_risk',
-                'severity' => 'high',
-                'entity_type' => 'Contract',
-                'entity_id' => $c->id,
-                'reference' => $c->contract_reference,
-                'message' => "Contract {$c->contract_reference} is >90% through its duration",
+                    return $total > 0 && ($elapsed / $total) >= 0.9;
+                });
+
+            foreach ($nearingDeadline as $contract) {
+                $flags[] = [
+                    'type' => 'deadline_risk',
+                    'severity' => 'high',
+                    'entity_type' => 'Contract',
+                    'entity_id' => $contract->id,
+                    'reference' => $contract->contract_reference,
+                    'message' => "Contract {$contract->contract_reference} is >90% through its duration",
+                ];
+            }
+
+            $overdueNoa = Award::where('status', 'noa_issued')
+                ->whereNotNull('noa_acknowledgment_deadline')
+                ->where('noa_acknowledgment_deadline', '<', now())
+                ->whereNull('noa_acknowledged_at')
+                ->get();
+
+            foreach ($overdueNoa as $award) {
+                $flags[] = [
+                    'type' => 'noa_overdue',
+                    'severity' => 'critical',
+                    'entity_type' => 'Award',
+                    'entity_id' => $award->id,
+                    'reference' => $award->noa_reference,
+                    'message' => "NOA {$award->noa_reference} acknowledgment is overdue",
+                ];
+            }
+
+            $failedBiddings = Invitation::where('status', 'failed')
+                ->where('created_at', '>=', now()->subDays(90))
+                ->count();
+
+            if ($failedBiddings > 0) {
+                $flags[] = [
+                    'type' => 'failed_biddings',
+                    'severity' => 'medium',
+                    'entity_type' => 'Summary',
+                    'entity_id' => null,
+                    'reference' => null,
+                    'message' => "{$failedBiddings} failed bidding(s) in the last 90 days",
+                ];
+            }
+
+            return [
+                'flags' => $flags,
+                'total_flags' => count($flags),
+                'critical_count' => count(array_filter($flags, fn($flag) => $flag['severity'] === 'critical')),
+                'high_count' => count(array_filter($flags, fn($flag) => $flag['severity'] === 'high')),
             ];
-        }
+        });
+    }
 
-        // Overdue NOA acknowledgments
-        $overdueNoa = Award::where('status', 'noa_issued')
-            ->whereNotNull('noa_acknowledgment_deadline')
-            ->where('noa_acknowledgment_deadline', '<', now())
-            ->whereNull('noa_acknowledged_at')
-            ->get();
+    private function cachedJson(string $key, callable $resolver, int $ttlSeconds = self::REPORT_CACHE_TTL_SECONDS): JsonResponse
+    {
+        $payload = Cache::remember($key, now()->addSeconds($ttlSeconds), $resolver);
 
-        foreach ($overdueNoa as $a) {
-            $flags[] = [
-                'type' => 'noa_overdue',
-                'severity' => 'critical',
-                'entity_type' => 'Award',
-                'entity_id' => $a->id,
-                'reference' => $a->noa_reference,
-                'message' => "NOA {$a->noa_reference} acknowledgment is overdue",
-            ];
-        }
-
-        // Failed biddings (invitations that failed)
-        $failedBiddings = Invitation::where('status', 'failed')
-            ->where('created_at', '>=', now()->subDays(90))
-            ->count();
-
-        if ($failedBiddings > 0) {
-            $flags[] = [
-                'type' => 'failed_biddings',
-                'severity' => 'medium',
-                'entity_type' => 'Summary',
-                'entity_id' => null,
-                'reference' => null,
-                'message' => "{$failedBiddings} failed bidding(s) in the last 90 days",
-            ];
-        }
-
-        return response()->json([
-            'flags' => $flags,
-            'total_flags' => count($flags),
-            'critical_count' => count(array_filter($flags, fn($f) => $f['severity'] === 'critical')),
-            'high_count' => count(array_filter($flags, fn($f) => $f['severity'] === 'high')),
-        ]);
+        return response()->json($payload);
     }
 }

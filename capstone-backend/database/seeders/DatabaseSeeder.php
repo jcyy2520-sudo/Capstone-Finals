@@ -116,7 +116,52 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        // 8. Create sample Budget Officer
+        // 8. Create sample Procurement Officer
+        $procurementRole = Role::where('name', Role::PROCUREMENT_OFFICER)->first();
+        User::updateOrCreate(
+            ['email' => 'procurement@procureseal.gov.ph'],
+            [
+                'name' => 'Miguel Santiago',
+                'password' => bcrypt('ProcureSeal@2025'),
+                'role_id' => $procurementRole?->id,
+                'department_id' => Department::where('code', 'GSO')->first()?->id,
+                'designation' => 'Procurement Officer',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 9. Create sample Department Requester
+        $reqRole = Role::where('name', Role::DEPARTMENT_REQUESTER)->first();
+        User::updateOrCreate(
+            ['email' => 'requester@procureseal.gov.ph'],
+            [
+                'name' => 'Roberto Aquino',
+                'password' => bcrypt('ProcureSeal@2025'),
+                'role_id' => $reqRole?->id,
+                'department_id' => Department::where('code', 'MHO')->first()?->id,
+                'designation' => 'Supply and Procurement Focal Person',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 10. Create sample Department Head
+        $departmentHeadRole = Role::where('name', Role::DEPARTMENT_HEAD)->first();
+        User::updateOrCreate(
+            ['email' => 'depthead@procureseal.gov.ph'],
+            [
+                'name' => 'Dr. Elena Navarro',
+                'password' => bcrypt('ProcureSeal@2025'),
+                'role_id' => $departmentHeadRole?->id,
+                'department_id' => Department::where('code', 'MHO')->first()?->id,
+                'designation' => 'Department Head - MHO',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 11. Create sample Budget Officer
         $budgetRole = Role::where('name', Role::BUDGET_OFFICER)->first();
         User::updateOrCreate(
             ['email' => 'budget@procureseal.gov.ph'],
@@ -131,7 +176,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 9. Create sample Finance Officer
+        // 12. Create sample Finance Officer
         $financeRole = Role::where('name', Role::FINANCE_OFFICER)->first();
         User::updateOrCreate(
             ['email' => 'finance@procureseal.gov.ph'],
@@ -146,22 +191,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 10. Create sample Department Requester
-        $reqRole = Role::where('name', Role::DEPARTMENT_REQUESTER)->first();
-        User::updateOrCreate(
-            ['email' => 'requester@procureseal.gov.ph'],
-            [
-                'name' => 'Roberto Aquino',
-                'password' => bcrypt('ProcureSeal@2025'),
-                'role_id' => $reqRole?->id,
-                'department_id' => Department::where('code', 'MHO')->first()?->id,
-                'designation' => 'Department Head - MHO',
-                'status' => 'active',
-                'email_verified_at' => now(),
-            ]
-        );
-
-        // 11. Create sample TWG Member
+        // 13. Create sample TWG Member
         $twgRole = Role::where('name', Role::TWG_MEMBER)->first();
         User::updateOrCreate(
             ['email' => 'twg@procureseal.gov.ph'],
@@ -176,7 +206,22 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 12. Create sample COA/GPPB Observer
+        // 14. Create sample Inspection and Acceptance Committee member
+        $iacRole = Role::where('name', Role::INSPECTION_ACCEPTANCE_COMMITTEE)->first();
+        User::updateOrCreate(
+            ['email' => 'iac@procureseal.gov.ph'],
+            [
+                'name' => 'Ramon Castillo',
+                'password' => bcrypt('ProcureSeal@2025'),
+                'role_id' => $iacRole?->id,
+                'department_id' => Department::where('code', 'GSO')->first()?->id,
+                'designation' => 'IAC Chairperson',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // 15. Create sample COA/GPPB Observer
         $observerRole = Role::where('name', Role::OBSERVER)->first();
         User::updateOrCreate(
             ['email' => 'observer@procureseal.gov.ph'],
@@ -190,7 +235,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        // 13. Create sample Internal Auditor
+        // 16. Create sample Internal Auditor
         $auditorRole = Role::where('name', Role::INTERNAL_AUDITOR)->first();
         User::updateOrCreate(
             ['email' => 'auditor@procureseal.gov.ph'],

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\BAC;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\BAC\StoreAppEntryRequest;
 use App\Models\AppEntry;
+use App\Models\Role;
 use App\Services\AppEntryService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -26,12 +27,17 @@ class AppEntryController extends Controller
         $user = $request->user();
 
         // Role-based filtering
-        if ($user->hasRole('department_requester')) {
+        if ($user->hasRole(Role::DEPARTMENT_REQUESTER)) {
             // Department requesters see only their department's entries
             $query->where('department_id', $user->department_id);
-        } elseif ($user->hasRole('budget_officer')) {
+        } elseif ($user->hasRole(Role::DEPARTMENT_HEAD)) {
+            $query->where('department_id', $user->department_id)
+                ->whereIn('status', ['submitted', 'returned', 'pending_budget_certification', 'approved']);
+        } elseif ($user->hasRole(Role::BUDGET_OFFICER)) {
             // Budget officers see entries awaiting their certification
-            $query->whereIn('status', ['for_budget_certification', 'approved', 'for_hope_approval']);
+            $query->whereIn('status', ['pending_budget_certification', 'pending_secretariat_consolidation', 'pending_hope_approval', 'approved']);
+        } elseif ($user->hasAnyRole([Role::BAC_SECRETARIAT, Role::PROCUREMENT_OFFICER])) {
+            $query->whereIn('status', ['pending_secretariat_consolidation', 'pending_hope_approval', 'approved', 'returned']);
         }
         // BAC Secretariat, HOPE, Admin, Auditor see all
 
@@ -82,7 +88,7 @@ class AppEntryController extends Controller
 
         return response()->json([
             'message' => $entry->status === 'submitted'
-                ? 'APP entry submitted for consolidation.'
+                ? 'APP entry submitted for department head endorsement.'
                 : 'APP entry saved as draft.',
             'data' => $entry,
         ], 201);
@@ -196,14 +202,28 @@ class AppEntryController extends Controller
     }
 
     /**
+     * POST /api/app-entries/{id}/endorse
+     * Department Head endorses the APP entry.
+     */
+    public function endorse(Request $request, AppEntry $appEntry): JsonResponse
+    {
+        try {
+            $entry = $this->service->endorse($appEntry, $request->user()->id);
+            return response()->json(['message' => 'APP entry endorsed for budget certification.', 'data' => $entry]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
      * POST /api/app-entries/{id}/accept
-     * BAC Secretariat accepts for consolidation.
+     * BAC Secretariat or Procurement Officer consolidates the APP entry.
      */
     public function accept(Request $request, AppEntry $appEntry): JsonResponse
     {
         try {
             $entry = $this->service->acceptForConsolidation($appEntry, $request->user()->id);
-            return response()->json(['message' => 'Entry accepted for budget certification.', 'data' => $entry]);
+            return response()->json(['message' => 'Entry consolidated and routed for HOPE approval.', 'data' => $entry]);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

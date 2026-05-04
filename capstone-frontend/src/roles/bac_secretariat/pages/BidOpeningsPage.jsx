@@ -70,7 +70,7 @@ function BidOpeningsPage() {
     setShowStartModal(true);
     try {
       const [usersRes, invRes] = await Promise.all([
-        api.get('/admin/users'),
+        api.get('/committee-members'),
         api.get('/invitations', { params: { status: 'posted' } }),
       ]);
       const allUsers = usersRes.data?.data || usersRes.data || [];

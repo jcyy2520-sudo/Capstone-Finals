@@ -11,6 +11,23 @@ const SUMMARY_STATUS = {
   failure_of_bidding: { label: 'FAILED', cls: 'bg-red-100 text-red-800' },
 };
 
+const normalizeRankedBidders = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (typeof payload === 'string' && payload.trim() !== '') {
+    try {
+      const parsed = JSON.parse(payload);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+};
+
 function EvaluationsPage() {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,6 +61,8 @@ function EvaluationsPage() {
     if (expandedId === id) { setExpandedId(null); setSummary(null); }
     else { setExpandedId(id); loadSummary(id); }
   };
+
+  const rankedBidders = normalizeRankedBidders(summary?.summary?.ranked_bidders);
 
   const generateAbstract = async () => {
     try {
@@ -145,7 +164,7 @@ function EvaluationsPage() {
                     </div>
 
                     {/* Ranked Bidders */}
-                    {summary.summary?.ranked_bidders?.length > 0 && (
+                    {rankedBidders.length > 0 && (
                       <div>
                         <h4 className="text-sm font-semibold text-gray-700 mb-1">Ranked Bidders</h4>
                         <table className="w-full text-xs border border-gray-200 rounded">
@@ -155,7 +174,7 @@ function EvaluationsPage() {
                             <th className="px-3 py-1.5 text-right">Calculated Price</th>
                           </tr></thead>
                           <tbody>
-                            {summary.summary.ranked_bidders.map(r => (
+                            {rankedBidders.map(r => (
                               <tr key={r.rank} className="border-t border-gray-100">
                                 <td className="px-3 py-1.5 text-center font-bold">{r.rank}</td>
                                 <td className="px-3 py-1.5">Vendor #{r.vendor_id}</td>

@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\ProcurementNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationController extends Controller
 {
+    private const UNREAD_COUNT_CACHE_TTL_SECONDS = 10;
+
     /**
      * List notifications for the authenticated user.
      */
@@ -34,9 +37,12 @@ class NotificationController extends Controller
      */
     public function unreadCount(Request $request): JsonResponse
     {
-        $count = ProcurementNotification::where('recipient_id', $request->user()->id)
-            ->unread()
-            ->count();
+        $userId = $request->user()->id;
+        $count = Cache::remember(
+            $this->unreadCountCacheKey($userId),
+            now()->addSeconds(self::UNREAD_COUNT_CACHE_TTL_SECONDS),
+            fn () => ProcurementNotification::where('recipient_id', $userId)->unread()->count()
+        );
 
         return response()->json(['unread_count' => $count]);
     }
@@ -51,6 +57,7 @@ class NotificationController extends Controller
         }
 
         $notification->markAsRead();
+        $this->forgetUnreadCountCache($request->user()->id);
 
         return response()->json(['message' => 'Marked as read']);
     }
@@ -63,6 +70,8 @@ class NotificationController extends Controller
         ProcurementNotification::where('recipient_id', $request->user()->id)
             ->unread()
             ->update(['read_at' => now()]);
+
+        $this->forgetUnreadCountCache($request->user()->id);
 
         return response()->json(['message' => 'All notifications marked as read']);
     }
@@ -77,7 +86,18 @@ class NotificationController extends Controller
         }
 
         $notification->delete();
+        $this->forgetUnreadCountCache($request->user()->id);
 
         return response()->json(['message' => 'Notification deleted']);
+    }
+
+    private function unreadCountCacheKey(int $userId): string
+    {
+        return "notifications:unread-count:user:{$userId}";
+    }
+
+    private function forgetUnreadCountCache(int $userId): void
+    {
+        Cache::forget($this->unreadCountCacheKey($userId));
     }
 }

@@ -53,10 +53,13 @@ class Role extends Model
     const BAC_MEMBER = 'bac_member';
     const BAC_SECRETARIAT = 'bac_secretariat';
     const TWG_MEMBER = 'twg_member';
+    const PROCUREMENT_OFFICER = 'procurement_officer';
     const DEPARTMENT_REQUESTER = 'department_requester';
+    const DEPARTMENT_HEAD = 'department_head';
     const BUDGET_OFFICER = 'budget_officer';
     const FINANCE_OFFICER = 'finance_officer';
     const VENDOR = 'vendor';
+    const INSPECTION_ACCEPTANCE_COMMITTEE = 'inspection_acceptance_committee';
     const OBSERVER = 'observer';
     const INTERNAL_AUDITOR = 'internal_auditor';
 }

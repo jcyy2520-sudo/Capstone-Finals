@@ -2,8 +2,56 @@ import { useState, useEffect } from 'react';
 import { BarChart3, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
 import api from '../../../services/api';
 
+const normalizeModeBreakdown = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload
+      .map((item) => ({
+        procurement_mode: item?.procurement_mode || item?.mode || 'unknown',
+        count: Number(item?.count ?? 0),
+      }))
+      .filter((item) => item.procurement_mode);
+  }
+
+  if (payload && typeof payload === 'object') {
+    return Object.entries(payload).map(([procurement_mode, count]) => ({
+      procurement_mode,
+      count: Number(count ?? 0),
+    }));
+  }
+
+  return [];
+};
+
+const normalizeStatusBreakdown = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(payload).map(([module, statuses]) => {
+      if (Array.isArray(statuses)) {
+        return [
+          module,
+          statuses.map((item) => ({
+            status: item?.status || 'unknown',
+            count: Number(item?.count ?? 0),
+          })),
+        ];
+      }
+
+      return [
+        module,
+        Object.entries(statuses || {}).map(([status, count]) => ({
+          status,
+          count: Number(count ?? 0),
+        })),
+      ];
+    })
+  );
+};
+
 export default function AnalyticsPage() {
-  const [byMode, setByMode] = useState({});
+  const [byMode, setByMode] = useState([]);
   const [byDept, setByDept] = useState({});
   const [byStatus, setByStatus] = useState({});
   const [timeline, setTimeline] = useState(null);
@@ -18,9 +66,9 @@ export default function AnalyticsPage() {
           api.get('/reports/by-status'),
           api.get('/reports/timeline-compliance'),
         ]);
-        setByMode(modeRes.data);
+        setByMode(normalizeModeBreakdown(modeRes.data));
         setByDept(deptRes.data);
-        setByStatus(statusRes.data);
+        setByStatus(normalizeStatusBreakdown(statusRes.data));
         setTimeline(timeRes.data);
       } catch {
         // degrade gracefully
@@ -43,8 +91,8 @@ export default function AnalyticsPage() {
       {/* Timeline Compliance */}
       {timeline && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          <StatCard icon={Clock} label="Avg PR → Invitation" value={`${timeline.avg_pr_to_invitation_days} days`} />
-          <StatCard icon={TrendingUp} label="Avg Invitation → Award" value={`${timeline.avg_invitation_to_award_days} days`} />
+          <StatCard icon={Clock} label="Avg PR → Invitation" value={`${timeline.avg_days_pr_to_invitation ?? timeline.avg_pr_to_invitation_days ?? 0} days`} />
+          <StatCard icon={TrendingUp} label="Avg Invitation → Award" value={`${timeline.avg_days_invitation_to_award ?? timeline.avg_invitation_to_award_days ?? 0} days`} />
           <StatCard icon={AlertTriangle} label="Overdue Contracts" value={timeline.overdue_contracts} tone={timeline.overdue_contracts > 0 ? 'red' : 'green'} />
           <StatCard icon={BarChart3} label="Active Contracts" value={timeline.total_active_contracts} />
         </div>
@@ -57,13 +105,13 @@ export default function AnalyticsPage() {
             <h2 className="text-base font-semibold text-gray-900">Procurement by Mode</h2>
           </div>
           <div className="p-5 space-y-3">
-            {Object.keys(byMode).length === 0 ? (
+            {byMode.length === 0 ? (
               <p className="text-sm text-gray-400">No data yet</p>
             ) : (
-              Object.entries(byMode).map(([mode, count]) => (
-                <div key={mode} className="flex items-center justify-between">
-                  <span className="text-sm text-gray-700">{mode.replace(/_/g, ' ')}</span>
-                  <span className="text-sm font-bold text-gray-900">{count}</span>
+              byMode.map((item) => (
+                <div key={item.procurement_mode} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-700">{item.procurement_mode.replace(/_/g, ' ')}</span>
+                  <span className="text-sm font-bold text-gray-900">{item.count}</span>
                 </div>
               ))
             )}
@@ -99,10 +147,10 @@ export default function AnalyticsPage() {
           {Object.entries(byStatus).map(([module, statuses]) => (
             <div key={module}>
               <h3 className="text-[11px] uppercase tracking-wide text-gray-500 mb-3">{module}</h3>
-              {Object.entries(statuses).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between py-1">
-                  <span className="text-xs text-gray-600">{status.replace(/_/g, ' ')}</span>
-                  <span className="text-xs font-bold text-gray-900">{count}</span>
+              {statuses.map((item) => (
+                <div key={item.status} className="flex items-center justify-between py-1">
+                  <span className="text-xs text-gray-600">{item.status.replace(/_/g, ' ')}</span>
+                  <span className="text-xs font-bold text-gray-900">{item.count}</span>
                 </div>
               ))}
             </div>
